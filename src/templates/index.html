@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ISL Translator — Indian Sign Language Alphabet Recognition</title>
+  <meta name="description" content="Professional Indian Sign Language alphabet recognition, fingerspelling sentence composition, multilingual Indic translation, and speech synthesis." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans+Tamil:wght@400;600;700&family=Noto+Sans+Telugu:wght@400;600;700&family=Noto+Sans+Gujarati:wght@400;600;700&family=Noto+Sans+Kannada:wght@400;600;700&family=Noto+Sans+Malayalam:wght@400;600;700&family=Noto+Sans+Gurmukhi:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="workspace-body">
+
+  <!-- ============================================================ -->
+  <!-- TOP APP HEADER                                               -->
+  <!-- ============================================================ -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-mark" aria-hidden="true">
+        <span class="logo-icon">🤟</span>
+        <span class="logo-glow"></span>
+      </div>
+      <div class="header-brand">
+        <div class="brand-title-row">
+          <h1 class="brand-title">ISL Translator</h1>
+          <span class="badge-version">v2.6 Pro</span>
+        </div>
+        <p class="brand-tagline">Neural Indian Sign Language Recognition &amp; Multilingual Voice Synthesis</p>
+      </div>
+    </div>
+
+    <!-- Active Pipeline Badge (Alphabet Mode, 26 Letters) -->
+    <div class="pipeline-badge" id="alphabet-header-badge" title="Active Recognition Pipeline">
+      <div class="pulse-indicator ok"></div>
+      <div class="pipeline-info">
+        <span class="pipeline-name">Alphabet Mode</span>
+        <span class="pipeline-meta">26 Letters (A–Z) &middot; Single &amp; Dual-Stream</span>
+      </div>
+    </div>
+
+    <!-- Header Right: System Health Telemetry & Quit Action -->
+    <div class="header-right">
+      <div class="telemetry-bar" aria-label="System Health Telemetry">
+        <div class="telemetry-item" id="status-item-camera" title="Webcam Device Stream">
+          <span class="telemetry-dot ok" id="status-camera"></span>
+          <span class="telemetry-label">CAMERA</span>
+          <span class="telemetry-val" id="status-camera-val">READY</span>
+        </div>
+        <div class="telemetry-item" id="status-item-model" title="ML Inference Engine">
+          <span class="telemetry-dot ok" id="status-model"></span>
+          <span class="telemetry-label" id="status-model-label">INFERENCE</span>
+          <span class="telemetry-val" id="status-model-val">READY</span>
+        </div>
+        <div class="telemetry-item" id="status-item-speech" title="Speech Synthesis Engine">
+          <span class="telemetry-dot ok" id="status-speech"></span>
+          <span class="telemetry-label">TTS ENGINE</span>
+          <span class="telemetry-val" id="status-speech-val">READY</span>
+        </div>
+        <div class="telemetry-item" id="status-item-sse" title="Server-Sent Events Stream">
+          <span class="telemetry-dot ok" id="status-sse"></span>
+          <span class="telemetry-label">STREAM</span>
+          <span class="telemetry-val" id="status-sse-val">LIVE</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn-header-secondary" id="btn-backend-settings" type="button" title="Configure Backend Server URL">
+          <span class="action-icon">⚙️</span>
+          <span class="action-text">Backend</span>
+        </button>
+        <button class="btn-header-secondary" id="btn-toggle-shortcuts" type="button" title="View Keyboard Shortcuts &amp; Guide">
+          <span class="action-icon">⌨️</span>
+          <span class="action-text">Shortcuts</span>
+        </button>
+        <button class="btn-header-danger" id="btn-quit-app" type="button" title="Gracefully terminate server and release camera">
+          <span class="action-icon">⏻</span>
+          <span>Quit App</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- MAIN WORKSPACE GRID                                          -->
+  <!-- ============================================================ -->
+  <main class="app-workspace">
+
+    <!-- LEFT COLUMN: Computer Vision & Sensor Workspace -->
+    <div class="workspace-col col-left">
+
+      <!-- Camera Stream Card -->
+      <section class="card camera-card" aria-label="Live camera workspace">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-icon">📹</span>
+            <h2 class="card-title">Live Vision Stream</h2>
+            <span class="stream-indicator live" id="live-indicator">LIVE</span>
+          </div>
+          <div class="card-header-tools">
+            <span class="fps-counter" id="fps-badge">FPS: --</span>
+            <button class="btn-cam-toggle" id="btn-toggle-camera" type="button" title="Start or Pause Webcam Feed">
+              📷 Pause Camera
+            </button>
+            <button class="hud-toggle-btn" id="btn-toggle-hud" type="button" title="Toggle HUD telemetry overlay">
+              HUD: ON
+            </button>
+          </div>
+        </div>
+
+        <div class="camera-viewport-wrap">
+          <div class="camera-aspect-ratio">
+            <img
+              id="camera-img"
+              src="/video_feed"
+              alt="Live webcam stream with MediaPipe hand landmark tracking"
+              class="camera-stream"
+            />
+
+            <!-- Visual Loading Skeleton -->
+            <div class="camera-loading" id="camera-loading" style="display:none;">
+              <div class="spinner"></div>
+              <span>Connecting to video stream...</span>
+            </div>
+
+            <!-- In-Viewport HUD Overlay -->
+            <div class="camera-hud" id="camera-hud">
+              <div class="hud-top-left">
+                <span class="hud-chip live-chip" id="hud-live-pill">
+                  <span class="hud-live-dot"></span> LIVE
+                </span>
+                <span class="hud-chip metric-chip" id="hud-fps-pill">FPS: --</span>
+              </div>
+              <div class="hud-top-right">
+                <span class="hud-chip hand-chip" id="hud-hand-pill">
+                  <span class="hud-hand-icon">✋</span>
+                  <span id="hud-hand-text">NO HAND</span>
+                </span>
+                <span class="hud-chip model-chip" id="hud-model-pill">
+                  26-Class Single-Hand
+                </span>
+              </div>
+            </div>
+
+            <!-- Camera Offline / Error Overlay -->
+            <div class="camera-overlay" id="camera-overlay" style="display:none;">
+              <div class="overlay-modal">
+                <div class="overlay-icon">⚠️</div>
+                <h3 class="overlay-title">Video Stream Disconnected</h3>
+                <p class="overlay-desc" id="camera-overlay-msg">Webcam feed unavailable or released. Check device permissions.</p>
+                <button class="overlay-retry-btn" id="btn-reconnect-stream" type="button">
+                  Reconnect Stream
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="camera-status-strip">
+          <div class="status-strip-left">
+            <span class="strip-dot"></span>
+            <span class="strip-text" id="camera-hint-text">MediaPipe Hands · 21 Keypoints · Dual &amp; Single-Hand Inference</span>
+          </div>
+          <div class="status-strip-right">
+            <span class="resolution-tag">640 &times; 480</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Hand Tracking & Landmark Telemetry Card -->
+      <section class="card hand-tracking-card" aria-label="Hand tracking status">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-icon">🖐️</span>
+            <h3 class="card-title">Hand Tracking Telemetry</h3>
+          </div>
+          <div class="hand-count-pill" id="telemetry-hand-count">
+            0 Hands
+          </div>
+        </div>
+
+        <div class="hand-sensors-grid">
+          <!-- Primary Hand Tracker -->
+          <div class="hand-sensor-box" id="sensor-primary-hand">
+            <div class="sensor-header">
+              <div class="sensor-icon">✋</div>
+              <div class="sensor-info">
+                <span class="sensor-role">Primary Active Hand</span>
+                <span class="sensor-name">Lead Signer Hand</span>
+              </div>
+              <span class="sensor-badge missing" id="badge-primary-hand">MISSING</span>
+            </div>
+            <div class="sensor-details">
+              <div class="detail-row">
+                <span class="detail-label">Status</span>
+                <span class="detail-value" id="val-primary-status">No Landmark Lock</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Landmark Array</span>
+                <span class="detail-value" id="val-primary-landmarks">21 Coordinates / 63D</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Secondary Hand Tracker -->
+          <div class="hand-sensor-box" id="sensor-secondary-hand">
+            <div class="sensor-header">
+              <div class="sensor-icon">🤚</div>
+              <div class="sensor-info">
+                <span class="sensor-role">Secondary Hand</span>
+                <span class="sensor-name">Support / Auxiliary</span>
+              </div>
+              <span class="sensor-badge missing" id="badge-secondary-hand">MISSING</span>
+            </div>
+            <div class="sensor-details">
+              <div class="detail-row">
+                <span class="detail-label">Status</span>
+                <span class="detail-value" id="val-secondary-status">Standby</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Dual-Hand Safety</span>
+                <span class="detail-value text-amber" id="val-secondary-safety">Active (Suppresses False Emission)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Recognition Event History Card -->
+      <section class="card history-card" aria-label="Recognition history log">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-icon">⏱️</span>
+            <h3 class="card-title">Recognition History</h3>
+            <span class="history-count-badge" id="history-count-badge">0 events</span>
+          </div>
+          <button class="btn-text-subtle" id="btn-clear-history" type="button" title="Clear current session history log">
+            Clear Log
+          </button>
+        </div>
+
+        <div class="history-log-scroll" id="history-log-container">
+          <div class="history-empty" id="history-empty-state">
+            <span class="empty-icon">📝</span>
+            <p>Awaiting gesture emissions...</p>
+            <span class="empty-sub">Signs held stable for &ge;0.8s will be recorded here automatically.</span>
+          </div>
+          <ul class="history-list" id="history-list" style="display:none;">
+            <!-- Appended dynamically from real emissions -->
+          </ul>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- RIGHT COLUMN: Recognition, NLP Composition & Linguistics -->
+    <div class="workspace-col col-right" id="alphabet-mode-view">
+
+      <!-- Multi-Modal Decision Pathways (Landmark + CNN + Fusion) -->
+      <section class="card pathway-card" aria-label="Multi-modal recognition pathways">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-icon">⚡</span>
+            <h3 class="card-title">Live Recognition Debugger</h3>
+            <span class="sub-annotation">Dual-Stream Geometric &amp; Visual Decision Fusion</span>
+          </div>
+          <span class="fusion-pill" id="fusion-mode-pill">LANDMARK_DOMINANT</span>
+        </div>
+        <div class="pathways-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+          <!-- Landmark Pathway -->
+          <div class="pathway-cell" id="pathway-landmark">
+            <div class="pathway-header">
+              <span class="pathway-icon">📐</span>
+              <div class="pathway-info">
+                <span class="pathway-name">Landmark Geometry</span>
+                <span class="pathway-meta" id="pathway-landmark-model">Hybrid (26D / 144D)</span>
+              </div>
+              <span class="pathway-status ok" id="pathway-landmark-status">ACTIVE</span>
+            </div>
+            <div class="pathway-pred-row">
+              <span class="pathway-pred-glyph" id="pathway-landmark-pred">--</span>
+              <span class="pathway-pred-conf" id="pathway-landmark-conf">0%</span>
+            </div>
+            <div class="pathway-top-list" id="pathway-landmark-top" style="font-size:0.68rem; color:#94a3b8; font-family:monospace; margin-top:4px;">
+              Candidates: --
+            </div>
+          </div>
+
+          <!-- RGB CNN Pathway -->
+          <div class="pathway-cell" id="pathway-cnn">
+            <div class="pathway-header">
+              <span class="pathway-icon">🖼️</span>
+              <div class="pathway-info">
+                <span class="pathway-name">RGB Image CNN</span>
+                <span class="pathway-meta">Square ROI (128&times;128)</span>
+              </div>
+              <span class="pathway-status ok" id="pathway-cnn-status">ONLINE</span>
+            </div>
+            <div class="pathway-pred-row">
+              <span class="pathway-pred-glyph" id="pathway-cnn-pred">--</span>
+              <span class="pathway-pred-conf" id="pathway-cnn-conf">--</span>
+            </div>
+            <div class="pathway-top-list" id="pathway-cnn-top" style="font-size:0.68rem; color:#94a3b8; font-family:monospace; margin-top:4px;">
+              Candidates: --
+            </div>
+          </div>
+
+          <!-- Fused Decision Output -->
+          <div class="pathway-cell" id="pathway-fused">
+            <div class="pathway-header">
+              <span class="pathway-icon">⚖️</span>
+              <div class="pathway-info">
+                <span class="pathway-name">Decision Fusion</span>
+                <span class="pathway-meta" id="pathway-decision-status">Awaiting Hand</span>
+              </div>
+              <span class="pathway-status ok" id="pathway-fused-status">READY</span>
+            </div>
+            <div class="pathway-pred-row">
+              <span class="pathway-pred-glyph" id="pathway-fused-pred" style="color: #4ade80;">--</span>
+              <span class="pathway-pred-conf" id="pathway-fused-conf">0%</span>
+            </div>
+            <div class="pathway-top-list" id="pathway-fused-decision" style="font-size:0.68rem; color:#38bdf8; font-family:monospace; margin-top:4px;">
+              Status: STANDBY
+            </div>
+          </div>
+        </div>
+        <div class="pathway-footer" id="pathway-fusion-reason">
+          Landmark stream active with coordinate invariance.
+        </div>
+      </section>
+
+      <!-- Real-Time Gesture Recognition Card -->
+      <section class="card recognition-card" aria-label="Real-time gesture recognition">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-icon">🎯</span>
+            <h2 class="card-title">Gesture Classification</h2>
+            <span class="sub-annotation">Neural Landmark Classifier</span>
+          </div>
+          <span class="state-badge state-idle" id="alpha-state-badge">IDLE</span>
+        </div>
+
+        <div class="recognition-hero-grid">
+          <!-- Active Character Box -->
+          <div class="hero-char-cell" id="alpha-char-box">
+            <span class="cell-subhead">LIVE PREDICTION</span>
+            <div class="hero-char-glyph" id="alpha-big-char">--</div>
+            <div class="conf-meter-wrap">
+              <div class="conf-bar-track">
+                <div class="conf-bar-fill" id="alpha-conf-bar" style="width: 0%;"></div>
+              </div>
+              <div class="conf-stat-row">
+                <span class="conf-label">Confidence:</span>
+                <span class="conf-score" id="alpha-conf-num">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Latch Progress & Debounce Telemetry -->
+          <div class="hero-latch-cell">
+            <div class="latch-subcell">
+              <span class="cell-subhead">STABLE CANDIDATE</span>
+              <div class="latch-glyph-wrap">
+                <span class="latch-glyph" id="alpha-stable-char">--</span>
+                <span class="latch-note">Debouncing</span>
+              </div>
+            </div>
+
+            <div class="latch-subcell">
+              <span class="cell-subhead">LAST EMITTED</span>
+              <div class="latch-glyph-wrap">
+                <span class="latch-glyph emitted" id="alpha-emitted-char">--</span>
+                <span class="latch-note">Appended</span>
+              </div>
+            </div>
+
+            <!-- Hold-to-Emit Progress Bar -->
+            <div class="emit-progress-row">
+              <div class="emit-progress-header">
+                <span class="progress-title">Hold Stability Progress</span>
+                <span class="progress-threshold">Threshold: 0.8s</span>
+              </div>
+              <div class="emit-progress-track">
+                <div class="emit-progress-fill" id="alpha-latch-fill" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sentence Builder & Linguistic Assembly Card -->
+      <section class="card composer-card" aria-label="Sentence builder and word buffer">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-icon">✍️</span>
+            <h2 class="card-title">Sentence Builder &amp; WordBuffer</h2>
+          </div>
+          <div class="composer-meta">
+            <span class="word-count-badge" id="alpha-word-count">0 Words</span>
+            <button class="btn-copy-text" id="btn-copy-sentence" type="button" title="Copy full sentence to clipboard">
+              <span class="btn-icon">📋</span>
+              <span>Copy</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="composer-body">
+          <!-- In-Progress Word Assembly -->
+          <div class="buffer-word-strip">
+            <div class="buffer-label">
+              <span>CURRENT WORD:</span>
+              <span class="buffer-hint">(spelling in progress)</span>
+            </div>
+            <div class="buffer-word-content" id="alpha-current-word">
+              <span class="word-placeholder">Awaiting fingerspelled letters...</span>
+            </div>
+          </div>
+
+          <!-- Accumulated Full Sentence -->
+          <div class="buffer-sentence-box">
+            <div class="sentence-box-header">
+              <span class="sentence-label">ACCUMULATED SENTENCE:</span>
+              <span class="sentence-cursor-blink">|</span>
+            </div>
+            <div class="sentence-content-text empty" id="alpha-sentence-text">—</div>
+          </div>
+
+          <!-- Multilingual Translation Panel -->
+          <div class="translation-output-panel">
+            <div class="trans-top-row">
+              <div class="trans-heading">
+                <span class="trans-icon">🌐</span>
+                <span class="trans-label">TRANSLATION:</span>
+                <span class="trans-target-lang" id="alpha-lang-name">English</span>
+                <span class="trans-voice-badge" id="alpha-voice-badge">Voice: Checking...</span>
+              </div>
+
+              <!-- Dedicated Audio Synthesis Actions -->
+              <div class="trans-tts-actions">
+                <button class="btn-tts primary" id="btn-alpha-speak-trans" type="button" title="Speak translated text in target language (Shortcut: T)">
+                  <span class="btn-icon">🔊</span>
+                  <span>Speak Translation</span>
+                  <kbd class="key-badge">T</kbd>
+                </button>
+                <button class="btn-tts secondary" id="btn-alpha-speak-orig" type="button" title="Speak original English sentence (Shortcut: S)">
+                  <span class="btn-icon">🗣️</span>
+                  <span>Speak English</span>
+                  <kbd class="key-badge">S</kbd>
+                </button>
+              </div>
+            </div>
+
+            <div class="trans-result-text empty" id="alpha-translated-text">—</div>
+            <div class="trans-dictionary-note" id="trans-dictionary-note">
+              Dictionary Note: Multi-word sign phrases and 100+ everyday vocabulary words translate directly to Indic scripts with phonetic script transliteration fallback.
+            </div>
+          </div>
+
+          <!-- Composition Control Grid -->
+          <div class="composer-controls-grid">
+            <button class="btn-control action-space" id="btn-alpha-space" type="button" title="Complete word and insert space (Shortcut: SPACE)">
+              <div class="ctrl-top">
+                <span class="ctrl-icon">␣</span>
+                <kbd class="ctrl-kbd">SPACE</kbd>
+              </div>
+              <span class="ctrl-label">Space</span>
+            </button>
+
+            <button class="btn-control action-backspace" id="btn-alpha-backspace" type="button" title="Delete last character (Shortcut: BACKSPACE)">
+              <div class="ctrl-top">
+                <span class="ctrl-icon">⌫</span>
+                <kbd class="ctrl-kbd">BKSP</kbd>
+              </div>
+              <span class="ctrl-label">Backspace</span>
+            </button>
+
+            <button class="btn-control action-commit" id="btn-alpha-commit" type="button" title="Commit current word to sentence (Shortcut: ENTER)">
+              <div class="ctrl-top">
+                <span class="ctrl-icon">↵</span>
+                <kbd class="ctrl-kbd">ENTER</kbd>
+              </div>
+              <span class="ctrl-label">Commit Word</span>
+            </button>
+
+            <button class="btn-control action-clear-word" id="btn-alpha-clear-word" type="button" title="Clear current word buffer (Shortcut: C)">
+              <div class="ctrl-top">
+                <span class="ctrl-icon">✕</span>
+                <kbd class="ctrl-kbd">C</kbd>
+              </div>
+              <span class="ctrl-label">Clear Word</span>
+            </button>
+
+            <button class="btn-control action-clear-all" id="btn-alpha-clear-sent" type="button" title="Clear all text (word and sentence) (Shortcut: X)">
+              <div class="ctrl-top">
+                <span class="ctrl-icon">🗑️</span>
+                <kbd class="ctrl-kbd">X</kbd>
+              </div>
+              <span class="ctrl-label">Clear All</span>
+            </button>
+
+            <button class="btn-control action-reset" id="btn-alpha-reset" type="button" title="Reset gesture debounce machine (Shortcut: R)">
+              <div class="ctrl-top">
+                <span class="ctrl-icon">↺</span>
+                <kbd class="ctrl-kbd">R</kbd>
+              </div>
+              <span class="ctrl-label">Reset Latch</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Language Selector Card -->
+      <section class="card language-card" id="shared-lang-section" aria-label="Language selector">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="card-icon">🇮🇳</span>
+            <h3 class="card-title">Target Language</h3>
+            <span class="sub-annotation">10 Indic Languages Supported</span>
+          </div>
+          <span class="lang-shortcut-hint">Keys 1–9, 0</span>
+        </div>
+
+        <div class="language-pill-grid" id="lang-buttons" role="group" aria-label="Target language selection">
+          {% for lang in languages %}
+          <button
+            class="lang-btn {% if lang == 'English' %}active{% endif %}"
+            id="lang-btn-{{ lang }}"
+            data-lang="{{ lang }}"
+            type="button"
+            aria-pressed="{% if lang == 'English' %}true{% else %}false{% endif %}"
+            title="Switch output translation to {{ lang }}"
+          >
+            <span class="lang-native">{{ native_languages[lang] if native_languages and lang in native_languages else lang }}</span>
+            <span class="lang-romanized">{{ lang }}</span>
+            <span class="lang-hotkey">
+              {% if loop.index <= 9 %}{{ loop.index }}{% elif loop.index == 10 %}0{% endif %}
+            </span>
+          </button>
+          {% endfor %}
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- FOOTER STATUS & METADATA                                     -->
+  <!-- ============================================================ -->
+  <footer class="app-footer">
+    <div class="footer-left">
+      <span class="footer-badge">ISL Neural System</span>
+      <span class="footer-copy">26 Letters (A–Z) &middot; Multilingual Text &amp; Speech (TTS)</span>
+    </div>
+    <div class="footer-right">
+      <span class="footer-stat">Debounce Hold: 0.8s</span>
+      <span class="footer-dot">&middot;</span>
+      <span class="footer-stat">Inference Rate: 12 Hz</span>
+      <span class="footer-dot">&middot;</span>
+      <span class="footer-stat" id="footer-connection-stat">SSE: Active</span>
+    </div>
+  </footer>
+
+  <!-- ============================================================ -->
+  <!-- KEYBOARD SHORTCUTS MODAL                                     -->
+  <!-- ============================================================ -->
+  <div class="modal-backdrop" id="modal-shortcuts" style="display:none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon">⌨️</span>
+          <h3 class="modal-title">Keyboard Shortcuts Guide</h3>
+        </div>
+        <button class="modal-close-btn" id="btn-close-shortcuts" type="button" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcuts-group">
+          <h4 class="shortcuts-heading">Sentence Composition</h4>
+          <div class="shortcut-row"><span class="sc-desc">Commit current word &amp; insert space</span><kbd>SPACE</kbd></div>
+          <div class="shortcut-row"><span class="sc-desc">Delete last typed character</span><kbd>BACKSPACE</kbd></div>
+          <div class="shortcut-row"><span class="sc-desc">Commit word to sentence</span><kbd>ENTER</kbd></div>
+          <div class="shortcut-row"><span class="sc-desc">Clear current word buffer</span><kbd>C</kbd></div>
+          <div class="shortcut-row"><span class="sc-desc">Clear all text (word and sentence)</span><kbd>X</kbd></div>
+          <div class="shortcut-row"><span class="sc-desc">Reset debounce state machine</span><kbd>R</kbd></div>
+        </div>
+
+        <div class="shortcuts-group">
+          <h4 class="shortcuts-heading">Speech &amp; Translation</h4>
+          <div class="shortcut-row"><span class="sc-desc">Speak translated text in target language</span><kbd>T</kbd></div>
+          <div class="shortcut-row"><span class="sc-desc">Speak original English sentence</span><kbd>S</kbd></div>
+          <div class="shortcut-row"><span class="sc-desc">Select Language 1 to 10</span><kbd>1</kbd> &ndash; <kbd>9</kbd>, <kbd>0</kbd></div>
+        </div>
+
+        <div class="shortcuts-group">
+          <h4 class="shortcuts-heading">System &amp; Application</h4>
+          <div class="shortcut-row"><span class="sc-desc">Safely quit application &amp; release camera</span><kbd>Ctrl+Q</kbd> / <kbd>Cmd+Q</kbd></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-action-btn" id="btn-dismiss-shortcuts" type="button">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- QUIT / SHUTDOWN OVERLAY                                      -->
+  <!-- ============================================================ -->
+  <div class="app-shutdown-overlay" id="app-shutdown-overlay" style="display: none;">
+    <div class="shutdown-dialog">
+      <div class="shutdown-icon">🤟</div>
+      <h2>ISL Translator Closed</h2>
+      <p>The camera stream has been released and all background worker processes have terminated cleanly.</p>
+      <p class="shutdown-sub">You may now close this browser tab or window safely.</p>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

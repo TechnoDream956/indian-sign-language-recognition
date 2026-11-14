@@ -1,0 +1,192 @@
+{
+  "timestamp": 1792424584.8184829,
+  "sources": {
+    "openhands_indian": {
+      "license": "CC-BY-4.0",
+      "stats": {
+        "source_id": "openhands_indian",
+        "processed": 115,
+        "single_hand_saved": 108,
+        "dual_hand_saved": 538,
+        "quarantined": 121,
+        "labels": {
+          "R": 4,
+          "U": 4,
+          "I": 7,
+          "N": 4,
+          "G": 4,
+          "Z": 6,
+          "T": 5,
+          "S": 4,
+          "A": 4,
+          "F": 4,
+          "O": 4,
+          "H": 4,
+          "M": 4,
+          "J": 6,
+          "C": 4,
+          "D": 4,
+          "V": 4,
+          "Q": 4,
+          "X": 4,
+          "E": 7,
+          "B": 4,
+          "K": 4,
+          "L": 4,
+          "Y": 4,
+          "P": 4,
+          "W": 4
+        }
+      }
+    },
+    "ayesha_hannure_csv": {
+      "license": "Apache-2.0 / Academic",
+      "stats": {
+        "source_id": "ayesha_hannure_csv",
+        "processed": 12636,
+        "single_hand_saved": 0,
+        "dual_hand_saved": 0,
+        "quarantined": 12636,
+        "labels": {
+          "K": 486,
+          "J": 486,
+          "R": 486,
+          "N": 486,
+          "V": 486,
+          "L": 486,
+          "S": 486,
+          "T": 486,
+          "B": 486,
+          "X": 486,
+          "E": 486,
+          "H": 486,
+          "W": 486,
+          "U": 486,
+          "G": 486,
+          "Y": 486,
+          "O": 486,
+          "F": 486,
+          "I": 486,
+          "P": 486,
+          "D": 486,
+          "Q": 486,
+          "A": 486,
+          "C": 486,
+          "M": 486,
+          "Z": 486
+        }
+      }
+    },
+    "phase5p_solo_run_01": {
+      "license": "Project Local",
+      "stats": {
+        "source_id": "phase5p_solo_run_01",
+        "processed": 130,
+        "single_hand_saved": 0,
+        "dual_hand_saved": 130,
+        "quarantined": 0,
+        "labels": {
+          "O": 5,
+          "N": 5,
+          "Z": 5,
+          "Q": 5,
+          "P": 5,
+          "E": 5,
+          "D": 5,
+          "B": 5,
+          "C": 5,
+          "I": 5,
+          "H": 5,
+          "W": 5,
+          "V": 5,
+          "G": 5,
+          "F": 5,
+          "S": 5,
+          "R": 5,
+          "L": 5,
+          "M": 5,
+          "Y": 5,
+          "X": 5,
+          "A": 5,
+          "U": 5,
+          "T": 5,
+          "K": 5,
+          "J": 5
+        }
+      }
+    }
+  },
+  "audit": {
+    "single_hand": {
+      "total_files": 108,
+      "unique_exact": 108,
+      "exact_duplicate_count": 0,
+      "exact_duplicates": [],
+      "near_duplicate_count": 6,
+      "near_duplicates": [
+        [
+          "openhands_single_test_S_4_f006.npy",
+          "openhands_single_test_S_4_f012.npy",
+          9.676029003458098e-05
+        ],
+        [
+          "openhands_single_test_S_4_f006.npy",
+          "openhands_single_test_S_4_f018.npy",
+          4.029420961160213e-05
+        ],
+        [
+          "openhands_single_test_S_4_f009.npy",
+          "openhands_single_test_S_4_f015.npy",
+          8.636028360342607e-05
+        ],
+        [
+          "openhands_single_test_S_4_f009.npy",
+          "openhands_single_test_S_4_f021.npy",
+          4.864423317485489e-05
+        ],
+        [
+          "openhands_single_test_S_4_f015.npy",
+          "openhands_single_test_S_4_f021.npy",
+          9.714777843328193e-05
+        ],
+        [
+          "openhands_single_test_T_5_f012.npy",
+          "openhands_single_test_T_5_f018.npy",
+          6.600553751923144e-05
+        ]
+      ]
+    },
+    "dual_hand": {
+      "total_files": 668,
+      "unique_exact": 668,
+      "exact_duplicate_count": 0,
+      "exact_duplicates": [],
+      "near_duplicate_count": 0,
+      "near_duplicates": []
+    }
+  },
+  "storage": {
+    "initial": {
+      "timestamp": 1792424568.196692,
+      "free_disk_bytes": 19301085184,
+      "downloads_bytes": 152227212,
+      "extracted_bytes": 516450390,
+      "normalized_bytes": 82160,
+      "quarantine_bytes": 4801680,
+      "total_project_bytes": 7587005409,
+      "free_disk_gb": 17.98,
+      "project_gb": 7.07
+    },
+    "final": {
+      "timestamp": 1792424584.817544,
+      "free_disk_bytes": 19262205952,
+      "downloads_bytes": 152227212,
+      "extracted_bytes": 516450390,
+      "normalized_bytes": 463216,
+      "quarantine_bytes": 4801680,
+      "total_project_bytes": 7587386465,
+      "free_disk_gb": 17.94,
+      "project_gb": 7.07
+    }
+  }
+}

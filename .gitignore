@@ -1,0 +1,71 @@
+# ============================================================
+# .gitignore — Indian Sign Language Recognition & Translation
+# ============================================================
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# Python bytecode, typing & caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Operating System Metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# PyInstaller Build Artifacts & Standalone Packaging Bundles
+build/
+dist/
+*.spec.bak
+
+# Vercel Deployment & Caches
+.vercel/
+
+# Local Environment & Secrets
+.env
+.env.*
+*.pem
+*.key
+*.token
+
+# Reserve Archive (Preserved historical models, experiments, and datasets)
+reserve/
+
+# Raw Heavy Datasets & Staging Archives (Kept in local backup / reserve)
+data/archive/
+data/quarantine/
+data/staging_downloads/
+data/staging_extracted/
+data/external_dataset_work/
+data/combined_alphabet/
+data/normalized/
+data/phase5p_dual_hand/
+data/phase5/raw/
+data/translation_cache.json
+
+# Temporary files, Logs & Scratch
+logs/
+*.log
+*.tmp
+scratch/
+.freebuff/
+phase3_experimental_bundle.txt

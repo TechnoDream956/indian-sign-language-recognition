@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MediaPipe utilities for MOPGRU-ISL.
+MediaPipe utilities for Indian Sign Language (ISL) Recognition.
 
 The paper extracts 1662 landmark features per frame:
 - pose: 33 landmarks × 4 values = 132
@@ -27,9 +27,7 @@ def mediapipe_detection(image, model) -> Tuple[np.ndarray, object]:
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image_rgb.flags.writeable = False
     results = model.process(image_rgb)
-    image_rgb.flags.writeable = True
-    image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
-    return image_bgr, results
+    return image, results
 
 
 def draw_styled_landmarks(image, results) -> None:
