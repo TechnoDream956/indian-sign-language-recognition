@@ -4,16 +4,16 @@
  * Professional AI/Computer-Vision Workspace Frontend
  *
  * Features:
- *  - Real-time Server-Sent Events (SSE) listener (/events)
- *  - Live webcam stream health monitoring and reconnect handler
- *  - Real-time gesture classification, confidence meter, and hold-to-emit debouncer
- *  - Dual-hand landmark tracking telemetry and safety suppression display
- *  - WordBuffer assembly and sentence composition controls
- *  - Multilingual Indic translation and verified native TTS audio controls
- *  - Honest voice availability reporting (detects installed vs missing macOS voices)
- *  - In-session real-time recognition history log (zero synthetic data)
- *  - Keyboard shortcuts modal and global hotkeys
- *  - Clean application lifecycle, heartbeat, and graceful shutdown
+ *  - Real-time Hand Tracking Skeleton Overlay on HTML5 Canvas (21 keypoints, bone lines)
+ *  - Adaptive Paced Video Streaming with Dynamic RTT Latency Monitoring & Monotonic Frame Drops
+ *  - Persistent Stable Letter Display & Smooth Latch Progress Tracking
+ *  - Multilingual Translation with Real-time & Manual Triggering
+ *  - Client-Side Web Speech API (TTS) with Native Indic Voice Routing & Fallbacks
+ *  - Play / Stop / Replay Audio Controls
+ *  - Manual Sign Commitment (+ Commit Sign)
+ *  - Safe Camera Session Toggle (prevents unintended server shutdowns)
+ *  - System Settings Modal (Backend URL, Latency Ping Test, Mirroring, Confidence Threshold)
+ *  - Keyboard Shortcuts Guide and Full Lifecycle Resilience
  */
 
 "use strict";
@@ -31,7 +31,6 @@ const DEV_MOCK_MODE = false;
 const RENDER_BACKEND_URL = "https://isl-recognition-backend.onrender.com";
 
 function getApiUrl(endpoint) {
-  // 1. Explicit window or localStorage override
   let base = window.ISL_BACKEND_URL || localStorage.getItem("isl_backend_url");
   if (!base) {
     const isLocalhost = (
@@ -41,7 +40,6 @@ function getApiUrl(endpoint) {
        window.location.hostname === "127.0.0.1" ||
        window.location.protocol === "file:")
     );
-    // Remote environments (Vercel, custom domain) default to Render backend
     base = isLocalhost ? "" : RENDER_BACKEND_URL;
   }
   if (!base) return endpoint;
@@ -49,6 +47,49 @@ function getApiUrl(endpoint) {
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   return `${cleanBase}${cleanEndpoint}`;
 }
+
+// ------------------------------------------------------------------ //
+//  Session Security & Cryptographic Token State                       //
+// ------------------------------------------------------------------ //
+
+let feedbackSessionToken = (function () {
+  try {
+    // Purge legacy persistent localStorage token to prevent long-lived disk leakage
+    localStorage.removeItem("isl_feedback_session_token");
+    return sessionStorage.getItem("isl_feedback_session_token") || null;
+  } catch (e) {
+    return null;
+  }
+})();
+
+function saveFeedbackSessionToken(token) {
+  if (!token || typeof token !== "string") return;
+  feedbackSessionToken = token.trim();
+  try {
+    // Store exclusively in sessionStorage for anonymous browser session lifetime
+    sessionStorage.setItem("isl_feedback_session_token", feedbackSessionToken);
+    localStorage.removeItem("isl_feedback_session_token");
+  } catch (e) {}
+}
+
+function getFeedbackHeaders(customHeaders = {}) {
+  const h = { ...customHeaders };
+  if (feedbackSessionToken) {
+    h["X-Session-Token"] = feedbackSessionToken;
+  }
+  return h;
+}
+
+function checkResponseSessionToken(resp) {
+  try {
+    if (!resp || !resp.headers) return;
+    const tokenHeader = resp.headers.get("X-Session-Token");
+    if (tokenHeader) {
+      saveFeedbackSessionToken(tokenHeader);
+    }
+  } catch (e) {}
+}
+
 
 // ------------------------------------------------------------------ //
 //  Constants & Keyboard Map                                          //
@@ -67,6 +108,35 @@ const KEY_TO_LANG = {
   "0": "Punjabi",
 };
 
+const BCP47_LANG_MAP = {
+  "English": "en-IN",
+  "Hindi": "hi-IN",
+  "Marathi": "mr-IN",
+  "Bengali": "bn-IN",
+  "Tamil": "ta-IN",
+  "Telugu": "te-IN",
+  "Gujarati": "gu-IN",
+  "Kannada": "kn-IN",
+  "Malayalam": "ml-IN",
+  "Punjabi": "pa-IN",
+};
+
+// MediaPipe 21 Hand Landmarks Skeleton Connectivity
+const HAND_CONNECTIONS = [
+  // Palm Base
+  [0, 1], [0, 5], [5, 9], [9, 13], [13, 17], [0, 17],
+  // Thumb
+  [1, 2], [2, 3], [3, 4],
+  // Index Finger
+  [5, 6], [6, 7], [7, 8],
+  // Middle Finger
+  [9, 10], [10, 11], [11, 12],
+  // Ring Finger
+  [13, 14], [14, 15], [15, 16],
+  // Pinky Finger
+  [17, 18], [18, 19], [19, 20]
+];
+
 // ------------------------------------------------------------------ //
 //  DOM Element References                                            //
 // ------------------------------------------------------------------ //
@@ -74,9 +144,9 @@ const KEY_TO_LANG = {
 // Camera & Viewport
 const $cameraImg            = document.getElementById("camera-img");
 const $browserWebcamVideo   = document.getElementById("browser-webcam-video");
+const $landmarkCanvas       = document.getElementById("landmark-overlay-canvas");
 const $cameraHud            = document.getElementById("camera-hud");
 const $btnToggleHud         = document.getElementById("btn-toggle-hud");
-const $btnToggleCamera      = document.getElementById("btn-toggle-camera");
 const $cameraOverlay        = document.getElementById("camera-overlay");
 const $cameraOverlayMsg     = document.getElementById("camera-overlay-msg");
 const $btnReconnectStream   = document.getElementById("btn-reconnect-stream");
@@ -85,6 +155,7 @@ const $liveIndicator        = document.getElementById("live-indicator");
 const $hudModePill          = document.getElementById("hud-mode-pill");
 const $fpsBadge             = document.getElementById("fps-badge");
 const $hudFpsPill           = document.getElementById("hud-fps-pill");
+const $hudLatencyPill       = document.getElementById("hud-latency-pill");
 const $hudHandPill          = document.getElementById("hud-hand-pill");
 const $hudHandText          = document.getElementById("hud-hand-text");
 const $cameraHintText       = document.getElementById("camera-hint-text");
@@ -135,6 +206,7 @@ const $alphaStableChar      = document.getElementById("alpha-stable-char");
 const $alphaEmittedChar     = document.getElementById("alpha-emitted-char");
 const $alphaLatchFill       = document.getElementById("alpha-latch-fill");
 const $alphaStateBadge      = document.getElementById("alpha-state-badge");
+const $btnCommitSign        = document.getElementById("btn-commit-sign");
 
 // WordBuffer & Composer
 const $alphaCurrentWord     = document.getElementById("alpha-current-word");
@@ -146,8 +218,11 @@ const $btnCopySentence      = document.getElementById("btn-copy-sentence");
 const $alphaLangName        = document.getElementById("alpha-lang-name");
 const $alphaVoiceBadge      = document.getElementById("alpha-voice-badge");
 const $alphaTranslatedText  = document.getElementById("alpha-translated-text");
+const $btnAlphaTranslate    = document.getElementById("btn-alpha-translate");
 const $btnAlphaSpeakTrans   = document.getElementById("btn-alpha-speak-trans");
 const $btnAlphaSpeakOrig    = document.getElementById("btn-alpha-speak-orig");
+const $btnAlphaStopSpeech   = document.getElementById("btn-alpha-stop-speech");
+const $btnAlphaReplaySpeech = document.getElementById("btn-alpha-replay-speech");
 const $langButtons          = document.querySelectorAll(".lang-btn");
 
 // Composition Controls
@@ -165,13 +240,29 @@ const $historyEmptyState    = document.getElementById("history-empty-state");
 const $historyList          = document.getElementById("history-list");
 const $btnClearHistory      = document.getElementById("btn-clear-history");
 
-// Modals, Toast & Quit
-const $btnToggleShortcuts   = document.getElementById("btn-toggle-shortcuts");
+// Header Actions & Modals
 const $btnBackendSettings   = document.getElementById("btn-backend-settings");
+const $btnToggleShortcuts   = document.getElementById("btn-toggle-shortcuts");
+const $btnSessionToggle     = document.getElementById("btn-session-toggle");
+const $sessionBtnText       = document.getElementById("session-btn-text");
+const $btnQuitApp           = document.getElementById("btn-quit-app");
 const $modalShortcuts       = document.getElementById("modal-shortcuts");
 const $btnCloseShortcuts    = document.getElementById("btn-close-shortcuts");
 const $btnDismissShortcuts  = document.getElementById("btn-dismiss-shortcuts");
-const $btnQuitApp           = document.getElementById("btn-quit-app");
+const $modalSettings        = document.getElementById("modal-settings");
+const $btnCloseSettings     = document.getElementById("btn-close-settings");
+const $btnSaveSettings      = document.getElementById("btn-save-settings");
+const $btnResetSettings     = document.getElementById("btn-reset-settings");
+const $settingBackendUrl    = document.getElementById("setting-backend-url");
+const $btnPingBackend       = document.getElementById("btn-ping-backend");
+const $pingStatusRow        = document.getElementById("ping-status-row");
+const $pingDot              = document.getElementById("ping-dot");
+const $pingText             = document.getElementById("ping-text");
+const $settingMirrorToggle  = document.getElementById("setting-mirror-toggle");
+const $settingConfThreshold = document.getElementById("setting-conf-threshold");
+const $settingConfVal       = document.getElementById("setting-conf-val");
+const $settingFpsTarget     = document.getElementById("setting-fps-target");
+const $settingFpsVal        = document.getElementById("setting-fps-val");
 const $appShutdownOverlay   = document.getElementById("app-shutdown-overlay");
 const $toastContainer       = document.getElementById("toast-container");
 
@@ -180,13 +271,36 @@ const $toastContainer       = document.getElementById("toast-container");
 // ------------------------------------------------------------------ //
 
 let activeLang = "English";
-let sseConnection = null;
+let sseAbortController = null;
+let isSseConnecting = false;
 let sseReconnectTimer = null;
+let sseReconnectAttempts = 0;
 let lastKnownEmittedLetter = null;
 let lastProcessedEmissionId = null;
 let historyLogEntries = [];
 let hudVisible = true;
 let voiceCatalog = {};
+
+// Recognition Cache & Diagnostics
+let latestRawPrediction = "--";
+let latestConfirmedLetter = "--";
+let latestConfidence = 0.0;
+
+// Streaming Engine State
+let isCloudMode = false;
+let browserWebcamStream = null;
+let streamingActive = false;
+let streamLoopTimer = null;
+let browserWebcamCanvas = null;
+let monotonicFrameSeq = 0;
+let lastCommittedFrameSeq = 0;
+let userTargetFps = 12;
+let userConfThreshold = 0.60;
+let isMirrored = true;
+
+// Speech Synthesis State
+let lastSpokenText = "";
+let lastSpokenLang = "English";
 
 // ------------------------------------------------------------------ //
 //  Toast Notification Utility                                         //
@@ -208,6 +322,318 @@ function showToast(message, type = "info") {
 }
 
 // ------------------------------------------------------------------ //
+//  Hand Skeleton Canvas Overlay Renderer                              //
+// ------------------------------------------------------------------ //
+
+function renderLandmarks(landmarks) {
+  if (!$landmarkCanvas) return;
+  const ctx = $landmarkCanvas.getContext("2d");
+  const width = $landmarkCanvas.width;
+  const height = $landmarkCanvas.height;
+
+  ctx.clearRect(0, 0, width, height);
+
+  if (!landmarks || !Array.isArray(landmarks) || landmarks.length === 0) {
+    return;
+  }
+
+  landmarks.forEach((hand, handIdx) => {
+    const points = hand.points || [];
+    if (!points || points.length < 21) return;
+
+    // Palette: Hand 0 Cyan/Emerald, Hand 1 Purple/Rose
+    const boneColor = handIdx === 0 ? "rgba(56, 189, 248, 0.85)" : "rgba(192, 132, 252, 0.85)";
+    const jointColor = handIdx === 0 ? "#10b981" : "#f43f5e";
+
+    // 1. Draw Skeleton Bone Lines
+    ctx.strokeStyle = boneColor;
+    ctx.lineWidth = 2.8;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    HAND_CONNECTIONS.forEach(([i, j]) => {
+      const p1 = points[i];
+      const p2 = points[j];
+      if (p1 && p2) {
+        ctx.beginPath();
+        ctx.moveTo(p1[0] * width, p1[1] * height);
+        ctx.lineTo(p2[0] * width, p2[1] * height);
+        ctx.stroke();
+      }
+    });
+
+    // 2. Draw Landmark Joint Nodes
+    points.forEach((pt, idx) => {
+      const x = pt[0] * width;
+      const y = pt[1] * height;
+      const isTip = [4, 8, 12, 16, 20].includes(idx);
+      const isWrist = idx === 0;
+
+      ctx.beginPath();
+      ctx.arc(x, y, isTip ? 4.5 : (isWrist ? 4.0 : 3.0), 0, 2 * Math.PI);
+      ctx.fillStyle = isTip ? "#fbbf24" : (isWrist ? "#38bdf8" : jointColor);
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    });
+  });
+}
+
+// ------------------------------------------------------------------ //
+//  Client-Side Web Speech API (TTS Engine)                           //
+// ------------------------------------------------------------------ //
+
+function getBrowserVoiceForLang(langName) {
+  if (!window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices || voices.length === 0) return null;
+
+  const targetTag = (BCP47_LANG_MAP[langName] || "en-IN").toLowerCase();
+  const shortLang = targetTag.split("-")[0];
+
+  // 1. Exact BCP-47 tag match (e.g., hi-IN, mr-IN)
+  let found = voices.find(v => {
+    const vLang = v.lang.toLowerCase().replace("_", "-");
+    return vLang === targetTag;
+  });
+  if (found) return found;
+
+  // 2. Primary language prefix match (e.g., hi, mr, bn, ta)
+  found = voices.find(v => v.lang.toLowerCase().startsWith(shortLang));
+  if (found) return found;
+
+  // 3. Name substring match
+  found = voices.find(v => v.name.toLowerCase().includes(langName.toLowerCase()));
+  if (found) return found;
+
+  // 4. Default English voice fallback
+  return voices.find(v => v.lang.toLowerCase().startsWith("en")) || voices[0];
+}
+
+// ------------------------------------------------------------------ //
+//  Speech Synthesis State & Multi-Engine Dispatcher                  //
+// ------------------------------------------------------------------ //
+
+let isNeuralTTSEnabled = (function () {
+  try {
+    return localStorage.getItem("isl_neural_tts") === "1";
+  } catch (e) {
+    return false;
+  }
+})();
+let currentNeuralAudio = null;
+let speechRequestSeq = 0;
+
+function speakTextInBrowser(cleanText, langName) {
+  if (!("speechSynthesis" in window)) {
+    console.warn("[TTS] Browser Web Speech API not supported. Falling back to server trigger.");
+    triggerServerSpeech(langName === "English" ? "original" : "translated");
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+  const voice = getBrowserVoiceForLang(langName);
+  if (voice) {
+    utterance.voice = voice;
+    utterance.lang = voice.lang;
+  } else {
+    utterance.lang = BCP47_LANG_MAP[langName] || "en-IN";
+  }
+
+  utterance.rate = 0.95;
+  utterance.pitch = 1.0;
+
+  utterance.onstart = () => {
+    const btn = langName === "English" ? $btnAlphaSpeakOrig : $btnAlphaSpeakTrans;
+    if (btn) btn.classList.add("speaking");
+    if ($statusSpeech && $statusSpeechVal) {
+      $statusSpeech.className = "telemetry-dot pulse-active";
+      $statusSpeechVal.textContent = "SPEAKING";
+    }
+  };
+
+  utterance.onend = () => {
+    const btn = langName === "English" ? $btnAlphaSpeakOrig : $btnAlphaSpeakTrans;
+    if (btn) btn.classList.remove("speaking");
+    if ($statusSpeech && $statusSpeechVal) {
+      $statusSpeech.className = "telemetry-dot ok";
+      $statusSpeechVal.textContent = "READY";
+    }
+  };
+
+  utterance.onerror = (err) => {
+    console.warn("[TTS] Web Speech Synthesis error:", err);
+    const btn = langName === "English" ? $btnAlphaSpeakOrig : $btnAlphaSpeakTrans;
+    if (btn) btn.classList.remove("speaking");
+    if ($statusSpeech && $statusSpeechVal) {
+      $statusSpeech.className = "telemetry-dot warn";
+      $statusSpeechVal.textContent = "IDLE";
+    }
+  };
+
+  window.speechSynthesis.speak(utterance);
+  const preview = cleanText.length > 25 ? cleanText.slice(0, 25) + "..." : cleanText;
+  showToast(`Speaking (${langName}): "${preview}"`, "info");
+}
+
+function speakTextNeural(cleanText, langName) {
+  const reqSeq = ++speechRequestSeq;
+  const btn = langName === "English" ? $btnAlphaSpeakOrig : $btnAlphaSpeakTrans;
+  if (btn) btn.classList.add("speaking");
+  if ($statusSpeech && $statusSpeechVal) {
+    $statusSpeech.className = "telemetry-dot pulse-active";
+    $statusSpeechVal.textContent = "SYNTHESIZING...";
+  }
+
+  fetch(getApiUrl("/api/tts/speak"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: cleanText, language: langName }),
+  })
+    .then((r) => r.json())
+    .then((data) => {
+      // Discard stale response if a newer speech request or stop was issued
+      if (reqSeq !== speechRequestSeq) {
+        return;
+      }
+
+      if (data && data.success && data.data_uri) {
+        if (currentNeuralAudio) {
+          try {
+            currentNeuralAudio.pause();
+            currentNeuralAudio.src = "";
+          } catch (e) {}
+          currentNeuralAudio = null;
+        }
+
+        const audio = new Audio(data.data_uri);
+        currentNeuralAudio = audio;
+
+        audio.onplay = () => {
+          if (btn) btn.classList.add("speaking");
+          if ($statusSpeech && $statusSpeechVal) {
+            $statusSpeech.className = "telemetry-dot pulse-active";
+            $statusSpeechVal.textContent = "SPEAKING";
+          }
+        };
+
+        audio.onended = () => {
+          if (btn) btn.classList.remove("speaking");
+          if ($statusSpeech && $statusSpeechVal) {
+            $statusSpeech.className = "telemetry-dot ok";
+            $statusSpeechVal.textContent = "READY";
+          }
+          if (currentNeuralAudio === audio) {
+            currentNeuralAudio = null;
+          }
+        };
+
+        audio.onerror = (err) => {
+          console.warn("[TTS] Neural audio playback failed. Falling back to browser speech:", err);
+          if (currentNeuralAudio === audio) {
+            currentNeuralAudio = null;
+          }
+          speakTextInBrowser(cleanText, langName);
+        };
+
+        audio.play().catch((playErr) => {
+          console.warn("[TTS] Audio play() rejected:", playErr);
+          if (currentNeuralAudio === audio) {
+            currentNeuralAudio = null;
+          }
+          speakTextInBrowser(cleanText, langName);
+        });
+
+        const preview = cleanText.length > 25 ? cleanText.slice(0, 25) + "..." : cleanText;
+        showToast(`Neural Speech (${langName}): "${preview}"`, "info");
+      } else {
+        // Fallback returned or synthesis failed
+        if (btn) btn.classList.remove("speaking");
+        speakTextInBrowser(cleanText, langName);
+      }
+    })
+    .catch((netErr) => {
+      if (reqSeq !== speechRequestSeq) return;
+      console.warn("[TTS] Neural speech request failed. Falling back to browser speech:", netErr);
+      if (btn) btn.classList.remove("speaking");
+      speakTextInBrowser(cleanText, langName);
+    });
+}
+
+function speakTextClient(text, langName = "English") {
+  if (!text || text === "—" || text.trim() === "") {
+    showToast("No sentence text available to speak.", "info");
+    return;
+  }
+  const cleanText = text.trim();
+  lastSpokenText = cleanText;
+  lastSpokenLang = langName;
+
+  // Stop any ongoing speech playback
+  if (currentNeuralAudio) {
+    try {
+      currentNeuralAudio.pause();
+      currentNeuralAudio.src = "";
+    } catch (e) {}
+    currentNeuralAudio = null;
+  }
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  if (isNeuralTTSEnabled) {
+    speakTextNeural(cleanText, langName);
+  } else {
+    speakTextInBrowser(cleanText, langName);
+  }
+}
+
+function stopSpeechClient() {
+  speechRequestSeq++;
+  if (currentNeuralAudio) {
+    try {
+      currentNeuralAudio.pause();
+      currentNeuralAudio.src = "";
+    } catch (e) {}
+    currentNeuralAudio = null;
+  }
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  if ($btnAlphaSpeakTrans) $btnAlphaSpeakTrans.classList.remove("speaking");
+  if ($btnAlphaSpeakOrig) $btnAlphaSpeakOrig.classList.remove("speaking");
+  if ($statusSpeech && $statusSpeechVal) {
+    $statusSpeech.className = "telemetry-dot ok";
+    $statusSpeechVal.textContent = "STOPPED";
+    setTimeout(() => {
+      if ($statusSpeechVal.textContent === "STOPPED") {
+        $statusSpeechVal.textContent = "READY";
+      }
+    }, 1200);
+  }
+  showToast("Audio playback stopped.", "info");
+}
+
+function replaySpeechClient() {
+  if (!lastSpokenText) {
+    const currentTrans = ($alphaTranslatedText?.textContent || "").trim();
+    const currentSent = ($alphaSentenceText?.textContent || "").trim();
+    if (currentTrans && currentTrans !== "—") {
+      speakTextClient(currentTrans, activeLang);
+    } else if (currentSent && currentSent !== "—") {
+      speakTextClient(currentSent, "English");
+    } else {
+      showToast("No speech audio to replay.", "info");
+    }
+    return;
+  }
+  speakTextClient(lastSpokenText, lastSpokenLang);
+}
+
+// ------------------------------------------------------------------ //
 //  TTS Voice Catalog Discovery                                        //
 // ------------------------------------------------------------------ //
 
@@ -220,77 +646,183 @@ async function loadVoiceCatalog() {
       updateVoiceBadgeUI(activeLang);
     }
   } catch (err) {
-    console.warn("[TTS] Could not load voice catalog:", err);
+    console.warn("[TTS] Could not load server voice catalog:", err);
+    updateVoiceBadgeUI(activeLang);
   }
 }
 
 function updateVoiceBadgeUI(lang) {
   if (!$alphaVoiceBadge) return;
-  const info = voiceCatalog[lang];
-  if (!info) {
-    $alphaVoiceBadge.textContent = "Voice: Status Unknown";
-    $alphaVoiceBadge.className = "trans-voice-badge warn";
+  const browserVoice = getBrowserVoiceForLang(lang);
+  if (browserVoice) {
+    $alphaVoiceBadge.textContent = `Voice: ${browserVoice.name} (${lang})`;
+    $alphaVoiceBadge.className = "trans-voice-badge ok";
     return;
   }
 
-  if (info.available && info.voice) {
+  const info = voiceCatalog[lang];
+  if (info && info.available && info.voice) {
     $alphaVoiceBadge.textContent = `Voice: ${info.voice} (${lang})`;
     $alphaVoiceBadge.className = "trans-voice-badge ok";
   } else if (lang === "English") {
-    $alphaVoiceBadge.textContent = "Voice: English (System)";
+    $alphaVoiceBadge.textContent = "Voice: English (System Default)";
     $alphaVoiceBadge.className = "trans-voice-badge ok";
   } else {
-    $alphaVoiceBadge.textContent = `Voice: Not Installed in macOS`;
-    $alphaVoiceBadge.className = "trans-voice-badge err";
+    $alphaVoiceBadge.textContent = `Voice: Client Web TTS (${lang})`;
+    $alphaVoiceBadge.className = "trans-voice-badge ok";
   }
 }
 
 // ------------------------------------------------------------------ //
-//  SSE — Real-Time State Listener                                      //
+//  SSE — Real-Time State Listener (Authenticated Fetch Stream)        //
 // ------------------------------------------------------------------ //
 
-function connectSSE() {
+function disconnectSSE() {
+  clearTimeout(sseReconnectTimer);
+  sseReconnectTimer = null;
+  isSseConnecting = false;
+  if (sseAbortController) {
+    try {
+      sseAbortController.abort();
+    } catch (e) {}
+    sseAbortController = null;
+  }
+  updateSseStatus(false, "PAUSED");
+}
+
+function scheduleSseReconnect(delayMs) {
+  if (isSessionTerminated) return;
+  clearTimeout(sseReconnectTimer);
+  sseReconnectAttempts += 1;
+  const backoff = delayMs || Math.min(1000 * Math.pow(1.5, Math.min(sseReconnectAttempts, 6)), 15000);
+  sseReconnectTimer = setTimeout(() => {
+    connectSSE();
+  }, backoff);
+}
+
+async function connectSSE() {
   if (DEV_MOCK_MODE) {
     runDevMockLoop();
     return;
   }
-
-  if (sseConnection) {
-    try { sseConnection.close(); } catch (e) {}
+  if (isSessionTerminated) {
+    return;
   }
 
+  // Cancel any existing stream and prevent duplicate connections
+  if (sseAbortController) {
+    try {
+      sseAbortController.abort();
+    } catch (e) {}
+    sseAbortController = null;
+  }
+
+  if (isSseConnecting) {
+    return;
+  }
+
+  isSseConnecting = true;
   updateSseStatus(false, "CONNECTING");
 
+  // Ensure session token exists before establishing authenticated stream
+  if (!feedbackSessionToken) {
+    try {
+      await initSessionToken();
+    } catch (e) {}
+  }
+
+  const controller = new AbortController();
+  sseAbortController = controller;
+
   try {
-    sseConnection = new EventSource(getApiUrl("/events"));
+    const headers = getFeedbackHeaders({
+      "Accept": "text/event-stream",
+      "Cache-Control": "no-cache",
+    });
 
-    sseConnection.onopen = () => {
-      updateSseStatus(true, "LIVE");
-      if ($cameraOverlay && $cameraOverlay.dataset.source === "sse") {
-        $cameraOverlay.style.display = "none";
-      }
-    };
+    // Connect strictly without query-string tokens (X-Session-Token header only)
+    const response = await fetch(getApiUrl("/events"), {
+      method: "GET",
+      headers: headers,
+      signal: controller.signal,
+    });
 
-    sseConnection.onmessage = (evt) => {
+    checkResponseSessionToken(response);
+
+    if (response.status === 401 || response.status === 403) {
+      console.warn(`[SSE] Authentication error (${response.status}). Refreshing session...`);
+      updateSseStatus(false, response.status === 403 ? "FORBIDDEN" : "UNAUTHORIZED");
+      isSseConnecting = false;
+      feedbackSessionToken = null;
       try {
-        const data = JSON.parse(evt.data);
-        applyState(data);
-      } catch (e) {
-        console.warn("[SSE] Parse error on incoming packet:", e);
-      }
-    };
+        sessionStorage.removeItem("isl_feedback_session_token");
+      } catch (e) {}
+      await initSessionToken();
+      scheduleSseReconnect(3500);
+      return;
+    }
 
-    sseConnection.onerror = () => {
-      updateSseStatus(false, "RECONNECTING");
-      try { sseConnection.close(); } catch (e) {}
-      clearTimeout(sseReconnectTimer);
-      sseReconnectTimer = setTimeout(connectSSE, 2500);
-    };
+    if (!response.ok || !response.body) {
+      throw new Error(`SSE HTTP error ${response.status}: ${response.statusText}`);
+    }
+
+    // Successfully connected!
+    isSseConnecting = false;
+    sseReconnectAttempts = 0;
+    updateSseStatus(true, "LIVE");
+    if ($cameraOverlay && $cameraOverlay.dataset.source === "sse") {
+      $cameraOverlay.style.display = "none";
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+
+      const parts = buffer.split(/\r?\n\r?\n/);
+      buffer = parts.pop() || "";
+
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+
+        const lines = trimmed.split(/\r?\n/);
+        for (const line of lines) {
+          if (line.startsWith("data:")) {
+            const rawJson = line.slice(5).trim();
+            if (rawJson) {
+              try {
+                const data = JSON.parse(rawJson);
+                if (data.landmarks) {
+                  renderLandmarks(data.landmarks);
+                }
+                applyState(data);
+              } catch (e) {
+                console.warn("[SSE] Parse error on payload:", e);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!controller.signal.aborted && !isSessionTerminated) {
+      scheduleSseReconnect(1500);
+    }
   } catch (err) {
-    console.error("[SSE] Connection initialization failed:", err);
-    updateSseStatus(false, "ERROR");
-    clearTimeout(sseReconnectTimer);
-    sseReconnectTimer = setTimeout(connectSSE, 3000);
+    isSseConnecting = false;
+    if (controller.signal.aborted || isSessionTerminated) {
+      return;
+    }
+    console.warn("[SSE] Stream interrupted:", err.message || err);
+    updateSseStatus(false, "RECONNECTING");
+    scheduleSseReconnect();
   }
 }
 
@@ -305,22 +837,15 @@ function updateSseStatus(isLive, labelText) {
 }
 
 // ------------------------------------------------------------------ //
-//  Cloud Browser Webcam Architecture                                 //
+//  Paced Adaptive Streaming Engine                                   //
 // ------------------------------------------------------------------ //
 
-let isCloudMode = false;
-let browserWebcamStream = null;
-let browserWebcamStreamingInterval = null;
-let isStreamingFrame = false;
-let browserWebcamCanvas = null;
-
 async function enableCloudWebcamMode() {
-  if (isCloudMode && browserWebcamStream) return;
+  if (isCloudMode && browserWebcamStream && streamingActive) return;
   isCloudMode = true;
 
-  console.log("[Camera] Enabling Cloud Browser Webcam mode...");
   if ($cameraHintText) {
-    $cameraHintText.textContent = "Cloud Mode: Streaming browser webcam frames to server inference engine";
+    $cameraHintText.textContent = "Cloud Mode: Adaptive browser webcam ingestion with real-time skeleton overlay";
   }
   if ($hudModePill) {
     $hudModePill.style.display = "inline-flex";
@@ -329,7 +854,7 @@ async function enableCloudWebcamMode() {
 
   const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
   if (!videoEl) {
-    console.error("[Camera] browser-webcam-video element not found in DOM");
+    console.error("[Camera] browser-webcam-video element missing in DOM");
     return;
   }
 
@@ -357,6 +882,10 @@ async function enableCloudWebcamMode() {
     await videoEl.play();
     videoEl.style.display = "block";
 
+    if ($landmarkCanvas) {
+      $landmarkCanvas.style.display = "block";
+      syncMirroring();
+    }
     if ($cameraImg) {
       $cameraImg.style.display = "none";
     }
@@ -367,23 +896,135 @@ async function enableCloudWebcamMode() {
       $cameraOverlay.style.display = "none";
     }
 
-    showToast("Webcam connected. Streaming frames to AI engine.", "success");
-    startFrameStreaming(videoEl);
+    startCameraSession();
+    showToast("Webcam connected. Vision tracking active.", "success");
   } catch (err) {
     console.warn("[Camera] getUserMedia failed:", err);
     if ($cameraOverlay) {
       $cameraOverlay.style.display = "flex";
       if ($cameraOverlayMsg) {
-        $cameraOverlayMsg.textContent = "Webcam access required in cloud mode. Click Reconnect to grant permission.";
+        $cameraOverlayMsg.textContent = "Webcam permission required. Click Reconnect to grant access.";
       }
     }
     showToast("Webcam permission denied: " + err.message, "error");
   }
 }
 
-function startFrameStreaming(videoEl) {
-  if (browserWebcamStreamingInterval) {
-    clearInterval(browserWebcamStreamingInterval);
+function startCameraSession() {
+  if (isSessionTerminated) return;
+
+  if (streamLoopTimer) {
+    clearTimeout(streamLoopTimer);
+    streamLoopTimer = null;
+  }
+
+  const isLocal = isLocalhostEnvironment();
+  const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
+
+  if ($cameraImg && isLocal && $cameraImg.dataset.activeSrc) {
+    $cameraImg.src = getApiUrl("/video_feed?t=" + Date.now());
+    $cameraImg.style.display = "block";
+    streamingActive = true;
+  } else {
+    enableCloudWebcamMode();
+  }
+
+  if ($sessionBtnText) $sessionBtnText.textContent = "STOP CAMERA";
+  const $sessionIcon = document.getElementById("session-btn-icon");
+  if ($sessionIcon) $sessionIcon.textContent = "⏹";
+
+  if ($btnSessionToggle) {
+    $btnSessionToggle.classList.remove("stopped");
+    $btnSessionToggle.classList.add("running");
+    $btnSessionToggle.title = "Stop Camera stream and freeze recognition";
+  }
+
+  const $liveIndicator = document.getElementById("live-indicator");
+  if ($liveIndicator) {
+    $liveIndicator.textContent = "LIVE";
+    $liveIndicator.className = "stream-indicator live";
+  }
+
+  // Resume authenticated SSE stream
+  if (!isSessionTerminated) {
+    connectSSE();
+  }
+
+  showToast("Camera started. Recognition active.", "success");
+}
+
+function stopCameraSession() {
+  streamingActive = false;
+  if (streamLoopTimer) {
+    clearTimeout(streamLoopTimer);
+    streamLoopTimer = null;
+  }
+
+  // Invalidate in-flight frame responses so pending predictions are discarded
+  monotonicFrameSeq += 1000;
+  lastCommittedFrameSeq = monotonicFrameSeq;
+
+  // Disconnect SSE stream and cancel background reader
+  disconnectSSE();
+
+  // Stop and release all active webcam tracks
+  if (browserWebcamStream) {
+    browserWebcamStream.getTracks().forEach((track) => {
+      try { track.stop(); } catch (e) {}
+    });
+    browserWebcamStream = null;
+  }
+
+  const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
+  if (videoEl) {
+    videoEl.pause();
+    videoEl.srcObject = null;
+  }
+
+  // In local hardware camera mode, stop image refresh
+  if ($cameraImg) {
+    $cameraImg.dataset.activeSrc = $cameraImg.src;
+    $cameraImg.style.display = "none";
+  }
+
+  if ($landmarkCanvas) {
+    const ctx = $landmarkCanvas.getContext("2d");
+    ctx.clearRect(0, 0, $landmarkCanvas.width, $landmarkCanvas.height);
+  }
+
+  if ($sessionBtnText) $sessionBtnText.textContent = "START CAMERA";
+  const $sessionIcon = document.getElementById("session-btn-icon");
+  if ($sessionIcon) $sessionIcon.textContent = "▶";
+
+  if ($btnSessionToggle) {
+    $btnSessionToggle.classList.remove("running");
+    $btnSessionToggle.classList.add("stopped");
+    $btnSessionToggle.title = "Start Camera stream and resume recognition";
+  }
+
+  const $liveIndicator = document.getElementById("live-indicator");
+  if ($liveIndicator) {
+    $liveIndicator.textContent = "STOPPED";
+    $liveIndicator.className = "stream-indicator paused";
+  }
+
+  showToast("Camera stopped. Video stream & sensor resources released.", "info");
+}
+
+function toggleCameraSession() {
+  if (streamingActive) {
+    stopCameraSession();
+  } else {
+    startCameraSession();
+  }
+}
+
+async function streamLoop(videoEl) {
+  if (!streamingActive || !videoEl || videoEl.paused || videoEl.ended || !videoEl.videoWidth) {
+    if (streamingActive) {
+      streamLoopTimer = setTimeout(() => streamLoop(videoEl), 100);
+    }
+    return;
   }
 
   if (!browserWebcamCanvas) {
@@ -392,51 +1033,69 @@ function startFrameStreaming(videoEl) {
     browserWebcamCanvas.height = 480;
   }
   const ctx = browserWebcamCanvas.getContext("2d");
+  ctx.drawImage(videoEl, 0, 0, 640, 480);
 
-  // Ingest frames every 80ms (~12.5 FPS)
-  browserWebcamStreamingInterval = setInterval(() => {
-    if (isStreamingFrame || !videoEl || videoEl.paused || videoEl.ended || !videoEl.videoWidth) {
+  const frameSeq = ++monotonicFrameSeq;
+  const startTime = performance.now();
+
+  browserWebcamCanvas.toBlob(async (blob) => {
+    if (!blob || !streamingActive) {
+      scheduleNextFrame(videoEl, startTime);
       return;
     }
-    isStreamingFrame = true;
 
     try {
-      ctx.drawImage(videoEl, 0, 0, 640, 480);
-      browserWebcamCanvas.toBlob(async (blob) => {
-        if (!blob) {
-          isStreamingFrame = false;
-          return;
+      const res = await fetch(getApiUrl("/api/camera/frame"), {
+        method: "POST",
+        headers: getFeedbackHeaders({ "Content-Type": "image/jpeg" }),
+        body: blob,
+      });
+      checkResponseSessionToken(res);
+
+      const rtt = Math.round(performance.now() - startTime);
+      if ($hudLatencyPill) {
+        $hudLatencyPill.textContent = `RTT: ${rtt}ms`;
+        if (rtt < 180) {
+          $hudLatencyPill.style.color = "#4ade80";
+        } else if (rtt < 380) {
+          $hudLatencyPill.style.color = "#fbbf24";
+        } else {
+          $hudLatencyPill.style.color = "#f87171";
         }
-        try {
-          const res = await fetch(getApiUrl("/api/camera/frame"), {
-            method: "POST",
-            headers: { "Content-Type": "image/jpeg" },
-            body: blob,
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.state) {
-              applyState(data.state);
-            }
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        // Latest-Frame-Wins: ignore stale response if newer frame already committed
+        if (frameSeq >= lastCommittedFrameSeq) {
+          lastCommittedFrameSeq = frameSeq;
+          if (data.landmarks) {
+            renderLandmarks(data.landmarks);
           }
-        } catch (postErr) {
-          console.debug("[Frame Ingest Warning]", postErr);
-        } finally {
-          isStreamingFrame = false;
+          if (data.state) {
+            applyState(data.state);
+          }
+          if (data.prediction_id) {
+            latestPredictionId = data.prediction_id;
+            currentFeedbackPredictionId = data.prediction_id;
+            handleFeedbackOpportunity(data);
+          }
         }
-      }, "image/jpeg", 0.7);
-    } catch (e) {
-      isStreamingFrame = false;
+      }
+    } catch (err) {
+      console.debug("[Streaming Loop Net Warning]", err);
+    } finally {
+      scheduleNextFrame(videoEl, startTime);
     }
-  }, 80);
+  }, "image/jpeg", 0.65);
 }
 
-function stopFrameStreaming() {
-  if (browserWebcamStreamingInterval) {
-    clearInterval(browserWebcamStreamingInterval);
-    browserWebcamStreamingInterval = null;
-  }
-  isStreamingFrame = false;
+function scheduleNextFrame(videoEl, startTime) {
+  if (!streamingActive) return;
+  const targetInterval = 1000 / userTargetFps;
+  const elapsed = performance.now() - startTime;
+  const delay = Math.max(5, targetInterval - elapsed);
+  streamLoopTimer = setTimeout(() => streamLoop(videoEl), delay);
 }
 
 async function checkEnvironmentAndInitWebcam() {
@@ -450,9 +1109,9 @@ async function checkEnvironmentAndInitWebcam() {
   );
   const forceCloud = urlParams.get("mode") === "cloud" || window.FORCE_CLOUD_CAMERA === true || isRemote;
 
-  // On remote environments (e.g. Vercel), trigger browser webcam immediately
   if (forceCloud) {
     enableCloudWebcamMode();
+    return;
   }
 
   try {
@@ -536,16 +1195,10 @@ function applyState(state) {
 
   // 4. Speech Synthesis Telemetry
   const speechStatus = state.speech_status || "Ready";
-  const isSpeaking = speechStatus === "Speaking...";
+  const isSpeaking = speechStatus === "Speaking..." || (window.speechSynthesis && window.speechSynthesis.speaking);
   if ($statusSpeech && $statusSpeechVal) {
     $statusSpeech.className = `telemetry-dot ${isSpeaking ? "pulse-active" : (speechStatus.includes("error") ? "err" : "ok")}`;
-    $statusSpeechVal.textContent = speechStatus.toUpperCase();
-  }
-  if ($btnAlphaSpeakTrans) {
-    $btnAlphaSpeakTrans.classList.toggle("speaking", isSpeaking);
-  }
-  if ($btnAlphaSpeakOrig) {
-    $btnAlphaSpeakOrig.classList.toggle("speaking", isSpeaking);
+    $statusSpeechVal.textContent = isSpeaking ? "SPEAKING" : speechStatus.toUpperCase();
   }
 
   // 5. Hand Tracking Telemetry (0, 1, 2 Hands)
@@ -682,28 +1335,26 @@ function applyState(state) {
     $pathwayFusionReason.textContent = state.fusion_reason;
   }
 
-  // Camera Toggle Button Sync
-  if ($btnToggleCamera && state.camera_enabled !== undefined) {
-    if (state.camera_enabled) {
-      $btnToggleCamera.textContent = "📷 Pause Camera";
-      $btnToggleCamera.classList.remove("paused");
-    } else {
-      $btnToggleCamera.textContent = "📷 Start Camera";
-      $btnToggleCamera.classList.add("paused");
-    }
-  }
-
   // 7. Real-Time Gesture Recognition Display
+  if (state.prediction_id && !isCloudMode) {
+    latestPredictionId = state.prediction_id;
+    currentFeedbackPredictionId = state.prediction_id;
+  }
   const rawLetter = state.fused_prediction || state.raw_prediction || state.prediction || state.alphabet_raw_letter || state.pred_label || "--";
   const isValidLetter = rawLetter !== "--" && rawLetter !== "...";
+  if (isValidLetter) {
+    latestRawPrediction = rawLetter;
+    latestPredictedLetter = rawLetter;
+  }
 
   if ($alphaBigChar) {
     $alphaBigChar.textContent = isValidLetter ? rawLetter : "--";
     $alphaBigChar.classList.toggle("detected", isValidLetter);
   }
 
-  // Real Confidence Bar & Percentage
+  // Confidence Bar & Percentage
   const alphaConf = parseFloat(state.fused_confidence !== undefined ? state.fused_confidence : (state.alphabet_confidence !== undefined ? state.alphabet_confidence : (state.confidence || 0.0)));
+  latestConfidence = alphaConf;
   const alphaPct = Math.min(100, Math.max(0, Math.round(alphaConf * 100)));
 
   if ($alphaConfNum) {
@@ -713,17 +1364,20 @@ function applyState(state) {
     $alphaConfBar.style.width = isValidLetter ? `${alphaPct}%` : "0%";
     if (alphaConf >= 0.70) {
       $alphaConfBar.style.background = "var(--color-primary-accent)";
-    } else if (alphaConf >= 0.40) {
+    } else if (alphaConf >= 0.45) {
       $alphaConfBar.style.background = "var(--color-warm-accent)";
     } else {
       $alphaConfBar.style.background = "var(--color-alert)";
     }
   }
 
-  // Stable Candidate & Debounce Telemetry
-  const stableLetter = state.stable_letter || state.alphabet_stable_letter || "--";
+  // Stable Candidate & Debounce Telemetry (Persistent Display)
+  const stableCandidate = state.stable_letter || state.alphabet_stable_letter || state.last_stable_letter;
+  if (stableCandidate && stableCandidate !== "--") {
+    latestConfirmedLetter = stableCandidate;
+  }
   if ($alphaStableChar) {
-    $alphaStableChar.textContent = stableLetter !== "--" ? stableLetter : "--";
+    $alphaStableChar.textContent = latestConfirmedLetter !== "--" ? latestConfirmedLetter : (stableCandidate || "--");
   }
 
   // Emitted Character & Session History Recording
@@ -740,12 +1394,10 @@ function applyState(state) {
     }
   }
 
-  // Calibrate initial emission counter on idle connect without recording ghost entry
   if (lastProcessedEmissionId === null && emissionId && !currentEmitted) {
     lastProcessedEmissionId = emissionId;
   }
 
-  // Record to history if a genuine new emission event occurred
   if (currentEmitted && emissionId && (lastProcessedEmissionId === null || emissionId > lastProcessedEmissionId)) {
     lastProcessedEmissionId = emissionId;
     if ($alphaEmittedChar) {
@@ -774,14 +1426,16 @@ function applyState(state) {
       badgeCategory = "emitted";
     } else if (alphaState === "IDLE" || alphaState === "RESET" || alphaState.startsWith("COOLDOWN")) {
       badgeCategory = "idle";
-    } else if (alphaState.includes("2 HANDS")) {
-      badgeCategory = "idle";
     }
     $alphaStateBadge.className = `state-badge state-${badgeCategory}`;
   }
 
   if ($alphaLatchFill) {
-    if (alphaState.startsWith("STABILIZING")) {
+    if (state.stability_progress !== undefined && state.stability_progress !== null) {
+      const stabPct = Math.min(100, Math.max(0, Math.round(state.stability_progress * 100)));
+      $alphaLatchFill.style.width = `${stabPct}%`;
+      $alphaLatchFill.style.background = stabPct >= 100 ? "var(--color-primary-accent)" : "var(--color-warm-accent)";
+    } else if (alphaState.startsWith("STABILIZING")) {
       const match = alphaState.match(/STABILIZING\((\d+)\/(\d+)\)/);
       if (match) {
         const current = parseInt(match[1], 10);
@@ -822,7 +1476,6 @@ function applyState(state) {
     $alphaSentenceText.classList.toggle("empty", !hasSentence);
   }
 
-  // Word counter
   const totalWords = (sentence.trim() ? sentence.trim().split(/\s+/).length : 0) + (currentWord.trim() ? 1 : 0);
   if ($alphaWordCount) {
     $alphaWordCount.textContent = `${totalWords} ${totalWords === 1 ? "Word" : "Words"}`;
@@ -916,7 +1569,7 @@ function escapeHtml(str) {
 }
 
 // ------------------------------------------------------------------ //
-//  Language Selection API                                            //
+//  Language Selection & Translation Triggers                         //
 // ------------------------------------------------------------------ //
 
 async function setLanguage(lang) {
@@ -932,8 +1585,6 @@ async function setLanguage(lang) {
       setActiveLanguageUI(activeLang);
       if ($alphaLangName) $alphaLangName.textContent = activeLang;
       updateVoiceBadgeUI(activeLang);
-
-      // Immediately fetch updated translation for current sentence/word
       fetchCurrentTranslation();
       showToast(`Language switched to ${activeLang}`, "info");
     }
@@ -943,18 +1594,99 @@ async function setLanguage(lang) {
   }
 }
 
+let translationRequestSeq = 0;
+let lastTranslatedText = "";
+let lastTranslatedLang = "";
+
 async function fetchCurrentTranslation() {
+  const sentence = ($alphaSentenceText?.textContent || "").replace(/^—$/, "").trim();
+  const word = ($alphaCurrentWord?.textContent || "").replace(/Awaiting.*/, "").trim();
+  const textToTranslate = sentence || word;
+
+  if (!textToTranslate) {
+    lastTranslatedText = "";
+    lastTranslatedLang = "";
+    if ($alphaTranslatedText) {
+      $alphaTranslatedText.textContent = "—";
+      $alphaTranslatedText.classList.add("empty");
+      $alphaTranslatedText.classList.remove("translating");
+    }
+    return;
+  }
+
+  // Avoid redundant in-flight or duplicate requests for exact same text and language
+  if (
+    textToTranslate === lastTranslatedText &&
+    activeLang === lastTranslatedLang &&
+    $alphaTranslatedText &&
+    !$alphaTranslatedText.classList.contains("empty") &&
+    $alphaTranslatedText.textContent !== "—"
+  ) {
+    return;
+  }
+
+  const reqSeq = ++translationRequestSeq;
+
+  // Visual loading indicator for in-flight translation
+  if ($alphaTranslatedText) {
+    $alphaTranslatedText.classList.add("translating");
+  }
+
   try {
-    const res = await fetch(getApiUrl("/api/alphabet/translation"));
+    const res = await fetch(getApiUrl("/api/translate"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: textToTranslate,
+        language: activeLang,
+      }),
+    });
+
+    // Guard against stale responses: ignore if newer request was dispatched
+    if (reqSeq < translationRequestSeq) {
+      return;
+    }
+
     if (res.ok) {
       const data = await res.json();
+      if (reqSeq < translationRequestSeq) return;
+
       if (data.translation !== undefined && $alphaTranslatedText) {
-        $alphaTranslatedText.textContent = data.translation.trim() || "—";
-        $alphaTranslatedText.classList.toggle("empty", !data.translation.trim());
+        lastTranslatedText = textToTranslate;
+        lastTranslatedLang = activeLang;
+        const translatedStr = data.translation.trim();
+        $alphaTranslatedText.textContent = translatedStr || "—";
+        $alphaTranslatedText.classList.toggle("empty", !translatedStr);
+
+        // Informative engine tooltip without layout shifts
+        if (data.engine === "indictrans2") {
+          $alphaTranslatedText.setAttribute("title", "Neural Machine Translation (IndicTrans2)");
+        } else if (data.engine === "legacy") {
+          $alphaTranslatedText.setAttribute("title", "Local Dictionary Translation");
+        }
+      }
+    } else {
+      // Fallback to legacy endpoint
+      const legacyRes = await fetch(getApiUrl("/api/alphabet/translation"));
+      if (reqSeq < translationRequestSeq) return;
+
+      if (legacyRes.ok) {
+        const legacyData = await legacyRes.json();
+        if (legacyData.translation !== undefined && $alphaTranslatedText) {
+          lastTranslatedText = textToTranslate;
+          lastTranslatedLang = activeLang;
+          const legacyStr = legacyData.translation.trim();
+          $alphaTranslatedText.textContent = legacyStr || "—";
+          $alphaTranslatedText.classList.toggle("empty", !legacyStr);
+        }
       }
     }
   } catch (err) {
-    console.warn("[Translation] Instant fetch failed:", err);
+    console.warn("[Translation] Fetch error:", err);
+  } finally {
+    if (reqSeq === translationRequestSeq && $alphaTranslatedText) {
+      $alphaTranslatedText.classList.remove("translating");
+    }
   }
 }
 
@@ -1007,10 +1739,8 @@ async function postBufferAction(action) {
       }
     }
 
-    // Immediately update translation
     fetchCurrentTranslation();
 
-    // Record action to history
     const actionLabelMap = {
       space: "SPACE",
       backspace: "BKSP",
@@ -1033,58 +1763,252 @@ async function postBufferAction(action) {
 }
 
 // ------------------------------------------------------------------ //
-//  Dedicated Speech Synthesis Triggers (English vs Translation)       //
+//  Manual Sign Commitment (+ Commit Sign)                           //
 // ------------------------------------------------------------------ //
 
-async function triggerSpeech(type = "translated") {
-  // Use dedicated endpoint to guarantee proper language and voice routing
-  const rawUrl = type === "translated" ? "/api/alphabet/speak-translation" : "/api/alphabet/speak";
-  const url = getApiUrl(rawUrl);
-  
+async function commitCurrentSign() {
+  const letter = (latestConfirmedLetter !== "--" ? latestConfirmedLetter : latestRawPrediction).trim().toUpperCase();
+  if (!letter || letter === "--" || letter === "...") {
+    showToast("No active sign detected to append.", "warning");
+    return;
+  }
+
   try {
-    const res = await fetch(url, {
+    const res = await fetch(getApiUrl("/api/alphabet/commit-letter"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: type }),
+      body: JSON.stringify({ letter: letter }),
     });
     const data = await res.json();
-
-    if (data.ok && data.triggered) {
-      const $activeBtn = type === "translated" ? $btnAlphaSpeakTrans : $btnAlphaSpeakOrig;
-      if ($activeBtn) {
-        $activeBtn.classList.add("speaking");
-        setTimeout(() => $activeBtn.classList.remove("speaking"), 2500);
+    if (data.ok) {
+      showToast(`Appended letter "${letter}" to word buffer`, "success");
+      if (data.current_word !== undefined && $alphaCurrentWord) {
+        $alphaCurrentWord.textContent = data.current_word;
+        $alphaCurrentWord.classList.remove("empty");
       }
-
-      if (type === "translated") {
-        const voiceInfo = voiceCatalog[activeLang]?.voice || activeLang;
-        showToast(`Speaking in ${activeLang} (${voiceInfo})...`, "success");
-      } else {
-        showToast("Speaking English sentence...", "info");
-      }
+      fetchCurrentTranslation();
+      recordHistoryEntry({
+        type: "MANUAL COMMIT",
+        glyph: letter,
+        score: Math.round(latestConfidence * 100),
+        timestamp: formatTimestamp(new Date()),
+      });
     } else {
-      // Diagnostic reason feedback
-      const currentSentence = ($alphaSentenceText?.textContent || "").trim();
-      const currentWord = ($alphaCurrentWord?.textContent || "").trim();
-      const hasText = (currentSentence && currentSentence !== "—") || (currentWord && !currentWord.includes("Awaiting"));
-
-      if (!hasText) {
-        showToast("No sentence text available to speak.", "info");
-      } else if (type === "translated" && ["Gujarati", "Malayalam", "Punjabi"].includes(activeLang)) {
-        showToast(`Native voice for ${activeLang} is not installed in macOS. (Hindi, Bengali, Tamil, Telugu, and Kannada voices are installed)`, "warning");
-      } else {
-        showToast("Speech synthesis busy or voice unavailable.", "warning");
-      }
+      postBufferAction("commit");
     }
   } catch (err) {
-    console.error("[Speech] Request failed:", err);
-    showToast("Speech synthesis request failed.", "error");
+    postBufferAction("commit");
   }
 }
 
 // ------------------------------------------------------------------ //
-//  Copy Sentence to Clipboard                                        //
+//  Server-Side Fallback Speech Trigger                               //
 // ------------------------------------------------------------------ //
+
+async function triggerServerSpeech(type = "translated") {
+  const rawUrl = type === "translated" ? "/api/alphabet/speak-translation" : "/api/alphabet/speak";
+  try {
+    await fetch(getApiUrl(rawUrl), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: type }),
+    });
+  } catch (err) {
+    console.warn("[Server Speech Warning]", err);
+  }
+}
+
+// ------------------------------------------------------------------ //
+//  Settings Modal & Preferences Management                           //
+// ------------------------------------------------------------------ //
+
+function openSettingsModal() {
+  if (!$modalSettings) return;
+  const currentUrl = localStorage.getItem("isl_backend_url") || "";
+  if ($settingBackendUrl) $settingBackendUrl.value = currentUrl;
+  if ($settingMirrorToggle) $settingMirrorToggle.checked = isMirrored;
+  const $neuralToggle = document.getElementById("setting-neural-tts-toggle");
+  if ($neuralToggle) $neuralToggle.checked = isNeuralTTSEnabled;
+  if ($settingConfThreshold) {
+    $settingConfThreshold.value = Math.round(userConfThreshold * 100);
+    if ($settingConfVal) $settingConfVal.textContent = `${$settingConfThreshold.value}%`;
+  }
+  if ($settingFpsTarget) {
+    $settingFpsTarget.value = userTargetFps;
+    if ($settingFpsVal) $settingFpsVal.textContent = `${userTargetFps} FPS`;
+  }
+  if ($pingStatusRow) $pingStatusRow.style.display = "none";
+  fetchLearningStats();
+  loadLearningPreferences();
+  $modalSettings.style.display = "flex";
+}
+
+function closeSettingsModal() {
+  if ($modalSettings) $modalSettings.style.display = "none";
+}
+
+async function testBackendPing() {
+  if (!$pingStatusRow || !$pingDot || !$pingText) return;
+  $pingStatusRow.style.display = "flex";
+  $pingDot.className = "ping-dot pinging";
+  $pingText.textContent = "Testing network latency...";
+
+  const targetUrl = ($settingBackendUrl?.value || "").trim();
+  const testUrl = targetUrl ? `${targetUrl.replace(/\/+$/, "")}/api/healthz` : getApiUrl("/api/healthz");
+
+  const t0 = performance.now();
+  try {
+    const res = await fetch(testUrl, { method: "GET", cache: "no-store" });
+    const elapsed = Math.round(performance.now() - t0);
+    if (res.ok) {
+      $pingDot.className = "ping-dot ok";
+      $pingText.textContent = `Online — Latency: ${elapsed}ms (Status: 200 OK)`;
+    } else {
+      $pingDot.className = "ping-dot err";
+      $pingText.textContent = `Server responded with status ${res.status} (${elapsed}ms)`;
+    }
+  } catch (err) {
+    $pingDot.className = "ping-dot err";
+    $pingText.textContent = `Connection failed: ${err.message}`;
+  }
+}
+
+function saveSettings() {
+  const newUrl = ($settingBackendUrl?.value || "").trim();
+  if (newUrl) {
+    localStorage.setItem("isl_backend_url", newUrl);
+  } else {
+    localStorage.removeItem("isl_backend_url");
+  }
+
+  if ($settingMirrorToggle) {
+    isMirrored = $settingMirrorToggle.checked;
+    localStorage.setItem("isl_mirror", isMirrored ? "1" : "0");
+    syncMirroring();
+  }
+
+  const $neuralToggle = document.getElementById("setting-neural-tts-toggle");
+  if ($neuralToggle) {
+    isNeuralTTSEnabled = $neuralToggle.checked;
+    localStorage.setItem("isl_neural_tts", isNeuralTTSEnabled ? "1" : "0");
+  }
+
+  if ($settingConfThreshold) {
+    userConfThreshold = parseInt($settingConfThreshold.value, 10) / 100;
+    localStorage.setItem("isl_conf_threshold", String(userConfThreshold));
+  }
+
+  if ($settingFpsTarget) {
+    userTargetFps = parseInt($settingFpsTarget.value, 10);
+    localStorage.setItem("isl_target_fps", String(userTargetFps));
+  }
+
+  closeSettingsModal();
+  showToast("Settings saved successfully.", "success");
+}
+
+function resetSettings() {
+  localStorage.removeItem("isl_backend_url");
+  localStorage.removeItem("isl_mirror");
+  localStorage.removeItem("isl_conf_threshold");
+  localStorage.removeItem("isl_target_fps");
+  localStorage.removeItem("isl_neural_tts");
+  localStorage.removeItem("isl_feedback_session_token");
+  sessionStorage.removeItem("isl_feedback_session_token");
+  isMirrored = true;
+  userConfThreshold = 0.60;
+  userTargetFps = 12;
+  isNeuralTTSEnabled = false;
+
+  if ($settingBackendUrl) $settingBackendUrl.value = "";
+  if ($settingMirrorToggle) $settingMirrorToggle.checked = true;
+  const $neuralToggle = document.getElementById("setting-neural-tts-toggle");
+  if ($neuralToggle) $neuralToggle.checked = false;
+  if ($settingConfThreshold) {
+    $settingConfThreshold.value = 60;
+    if ($settingConfVal) $settingConfVal.textContent = "60%";
+  }
+  if ($settingFpsTarget) {
+    $settingFpsTarget.value = 12;
+    if ($settingFpsVal) $settingFpsVal.textContent = "12 FPS";
+  }
+  syncMirroring();
+  showToast("Settings reset to default values.", "info");
+}
+
+function syncMirroring() {
+  const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
+  if (videoEl) {
+    videoEl.classList.toggle("mirrored", isMirrored);
+    videoEl.classList.toggle("unmirrored", !isMirrored);
+    videoEl.style.transform = isMirrored ? "scaleX(-1)" : "scaleX(1)";
+  }
+  if ($landmarkCanvas) {
+    $landmarkCanvas.classList.toggle("mirrored", isMirrored);
+    $landmarkCanvas.classList.toggle("unmirrored", !isMirrored);
+    $landmarkCanvas.style.transform = isMirrored ? "scaleX(-1)" : "scaleX(1)";
+  }
+}
+
+function loadPersistedSettings() {
+  const savedMirror = localStorage.getItem("isl_mirror");
+  if (savedMirror !== null) {
+    isMirrored = savedMirror === "1";
+  }
+  const savedConf = localStorage.getItem("isl_conf_threshold");
+  if (savedConf !== null) {
+    userConfThreshold = parseFloat(savedConf) || 0.60;
+  }
+  const savedFps = localStorage.getItem("isl_target_fps");
+  if (savedFps !== null) {
+    userTargetFps = parseInt(savedFps, 10) || 12;
+  }
+  const savedNeural = localStorage.getItem("isl_neural_tts");
+  if (savedNeural !== null) {
+    isNeuralTTSEnabled = savedNeural === "1";
+  }
+  const $neuralToggle = document.getElementById("setting-neural-tts-toggle");
+  if ($neuralToggle) {
+    $neuralToggle.checked = isNeuralTTSEnabled;
+  }
+  syncMirroring();
+}
+
+// ------------------------------------------------------------------ //
+//  Shortcuts Modal Handlers                                          //
+// ------------------------------------------------------------------ //
+
+function openShortcutsModal() {
+  if ($modalShortcuts) $modalShortcuts.style.display = "flex";
+}
+
+function closeShortcutsModal() {
+  if ($modalShortcuts) $modalShortcuts.style.display = "none";
+}
+
+function toggleHudOverlay() {
+  hudVisible = !hudVisible;
+  if ($cameraHud) {
+    $cameraHud.style.display = hudVisible ? "flex" : "none";
+  }
+  if ($btnToggleHud) {
+    $btnToggleHud.textContent = `HUD: ${hudVisible ? "ON" : "OFF"}`;
+    $btnToggleHud.classList.toggle("active", hudVisible);
+  }
+}
+
+function reconnectCameraStream() {
+  if (isCloudMode) {
+    showToast("Re-initializing browser webcam...", "info");
+    enableCloudWebcamMode();
+    return;
+  }
+  if (!$cameraImg) return;
+  showToast("Reconnecting video feed...", "info");
+  const timestamp = Date.now();
+  $cameraImg.src = getApiUrl(`/video_feed?t=${timestamp}`);
+  if ($cameraOverlay) $cameraOverlay.style.display = "none";
+}
 
 function copySentenceToClipboard() {
   if (!$alphaSentenceText) return;
@@ -1101,66 +2025,6 @@ function copySentenceToClipboard() {
 }
 
 // ------------------------------------------------------------------ //
-//  HUD Overlay Toggle                                                //
-// ------------------------------------------------------------------ //
-
-function toggleHudOverlay() {
-  hudVisible = !hudVisible;
-  if ($cameraHud) {
-    $cameraHud.style.display = hudVisible ? "flex" : "none";
-  }
-  if ($btnToggleHud) {
-    $btnToggleHud.textContent = `HUD: ${hudVisible ? "ON" : "OFF"}`;
-    $btnToggleHud.classList.toggle("active", hudVisible);
-  }
-}
-
-// ------------------------------------------------------------------ //
-//  Camera Stream Reconnect                                           //
-// ------------------------------------------------------------------ //
-
-function reconnectCameraStream() {
-  if (isCloudMode) {
-    showToast("Re-initializing browser webcam...", "info");
-    enableCloudWebcamMode();
-    return;
-  }
-  if (!$cameraImg) return;
-  showToast("Reconnecting video feed...", "info");
-  const timestamp = Date.now();
-  $cameraImg.src = getApiUrl(`/video_feed?t=${timestamp}`);
-  if ($cameraOverlay) $cameraOverlay.style.display = "none";
-}
-
-// ------------------------------------------------------------------ //
-//  Application Shutdown Coordinator                                  //
-// ------------------------------------------------------------------ //
-
-async function quitApplication() {
-  if ($appShutdownOverlay) $appShutdownOverlay.style.display = "flex";
-  try {
-    await fetch(getApiUrl("/api/shutdown"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    console.log("[Shutdown] Request emitted:", err);
-  }
-}
-
-// ------------------------------------------------------------------ //
-//  Keyboard Shortcuts Modal Handlers                                 //
-// ------------------------------------------------------------------ //
-
-function openShortcutsModal() {
-  if ($modalShortcuts) $modalShortcuts.style.display = "flex";
-}
-
-function closeShortcutsModal() {
-  if ($modalShortcuts) $modalShortcuts.style.display = "none";
-}
-
-// ------------------------------------------------------------------ //
 //  Event Listeners & Keybindings                                      //
 // ------------------------------------------------------------------ //
 
@@ -1173,9 +2037,38 @@ function setupEventListeners() {
   if ($btnAlphaClearSent) $btnAlphaClearSent.addEventListener("click", () => postBufferAction("clear_all"));
   if ($btnAlphaReset) $btnAlphaReset.addEventListener("click", () => postBufferAction("reset"));
 
-  // Audio Buttons
-  if ($btnAlphaSpeakTrans) $btnAlphaSpeakTrans.addEventListener("click", () => triggerSpeech("translated"));
-  if ($btnAlphaSpeakOrig) $btnAlphaSpeakOrig.addEventListener("click", () => triggerSpeech("original"));
+  // Manual Commit Sign
+  if ($btnCommitSign) $btnCommitSign.addEventListener("click", commitCurrentSign);
+
+  // Translation & Speech Actions
+  if ($btnAlphaTranslate) $btnAlphaTranslate.addEventListener("click", fetchCurrentTranslation);
+  if ($btnAlphaSpeakTrans) {
+    $btnAlphaSpeakTrans.addEventListener("click", () => {
+      const trans = ($alphaTranslatedText?.textContent || "").replace(/^—$/, "").trim();
+      if (trans) {
+        speakTextClient(trans, activeLang);
+      } else {
+        fetchCurrentTranslation().then(() => {
+          const updated = ($alphaTranslatedText?.textContent || "").replace(/^—$/, "").trim();
+          if (updated) speakTextClient(updated, activeLang);
+        });
+      }
+    });
+  }
+  if ($btnAlphaSpeakOrig) {
+    $btnAlphaSpeakOrig.addEventListener("click", () => {
+      const sent = ($alphaSentenceText?.textContent || "").replace(/^—$/, "").trim();
+      const word = ($alphaCurrentWord?.textContent || "").replace(/Awaiting.*/, "").trim();
+      const text = sent || word;
+      if (text) {
+        speakTextClient(text, "English");
+      } else {
+        showToast("Sentence is empty.", "info");
+      }
+    });
+  }
+  if ($btnAlphaStopSpeech) $btnAlphaStopSpeech.addEventListener("click", stopSpeechClient);
+  if ($btnAlphaReplaySpeech) $btnAlphaReplaySpeech.addEventListener("click", replaySpeechClient);
 
   // Copy Sentence Button
   if ($btnCopySentence) $btnCopySentence.addEventListener("click", copySentenceToClipboard);
@@ -1183,40 +2076,9 @@ function setupEventListeners() {
   // HUD & Stream Reconnect Buttons
   if ($btnToggleHud) $btnToggleHud.addEventListener("click", toggleHudOverlay);
   if ($btnReconnectStream) $btnReconnectStream.addEventListener("click", reconnectCameraStream);
-  if ($btnToggleCamera) {
-    $btnToggleCamera.addEventListener("click", async () => {
-      if (isCloudMode && browserWebcamStream) {
-        const tracks = browserWebcamStream.getVideoTracks();
-        const anyDisabled = tracks.some(t => !t.enabled);
-        const willEnable = anyDisabled;
-        tracks.forEach(t => t.enabled = willEnable);
-        const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
-        if (willEnable) {
-          if (videoEl && videoEl.paused) videoEl.play();
-          startFrameStreaming(videoEl);
-          showToast("Browser webcam feed resumed", "info");
-          $btnToggleCamera.textContent = "📷 Pause Camera";
-          $btnToggleCamera.classList.remove("paused");
-        } else {
-          stopFrameStreaming();
-          if (videoEl) videoEl.pause();
-          showToast("Browser webcam feed paused", "info");
-          $btnToggleCamera.textContent = "📷 Resume Camera";
-          $btnToggleCamera.classList.add("paused");
-        }
-        return;
-      }
-      try {
-        const res = await fetch(getApiUrl("/api/camera/toggle"), { method: "POST" });
-        const data = await res.json();
-        if (data.ok) {
-          showToast(data.camera_enabled ? "Camera resuming..." : "Camera paused", "info");
-        }
-      } catch (err) {
-        showToast("Camera toggle failed", "error");
-      }
-    });
-  }
+
+  // Safe Camera Session Toggle
+  if ($btnSessionToggle) $btnSessionToggle.addEventListener("click", toggleCameraSession);
 
   // History Clear Button
   if ($btnClearHistory) $btnClearHistory.addEventListener("click", clearHistoryLog);
@@ -1231,26 +2093,27 @@ function setupEventListeners() {
     });
   }
 
-  // Backend URL Settings Button
-  if ($btnBackendSettings) {
-    $btnBackendSettings.addEventListener("click", () => {
-      const current = localStorage.getItem("isl_backend_url") || window.location.origin;
-      const next = prompt("Configure Python Backend Server URL (e.g. https://my-isl-backend.onrender.com or http://localhost:5001):\n(Leave empty to use current host origin)", current);
-      if (next !== null) {
-        if (next.trim()) {
-          localStorage.setItem("isl_backend_url", next.trim());
-          showToast(`Backend URL set to: ${next.trim()}`, "info");
-        } else {
-          localStorage.removeItem("isl_backend_url");
-          showToast("Backend URL reset to default host.", "info");
-        }
-        setTimeout(() => window.location.reload(), 800);
-      }
+  // Settings Modal Buttons & Controls
+  if ($btnBackendSettings) $btnBackendSettings.addEventListener("click", openSettingsModal);
+  if ($btnCloseSettings) $btnCloseSettings.addEventListener("click", closeSettingsModal);
+  if ($btnSaveSettings) $btnSaveSettings.addEventListener("click", saveSettings);
+  if ($btnResetSettings) $btnResetSettings.addEventListener("click", resetSettings);
+  if ($btnPingBackend) $btnPingBackend.addEventListener("click", testBackendPing);
+  if ($modalSettings) {
+    $modalSettings.addEventListener("click", (e) => {
+      if (e.target === $modalSettings) closeSettingsModal();
     });
   }
-
-  // Quit Application Button
-  if ($btnQuitApp) $btnQuitApp.addEventListener("click", quitApplication);
+  if ($settingConfThreshold) {
+    $settingConfThreshold.addEventListener("input", () => {
+      if ($settingConfVal) $settingConfVal.textContent = `${$settingConfThreshold.value}%`;
+    });
+  }
+  if ($settingFpsTarget) {
+    $settingFpsTarget.addEventListener("input", () => {
+      if ($settingFpsVal) $settingFpsVal.textContent = `${$settingFpsTarget.value} FPS`;
+    });
+  }
 
   // Language Selection Buttons
   $langButtons.forEach((btn) => {
@@ -1277,10 +2140,12 @@ function setupEventListeners() {
       postBufferAction("commit");
     } else if (key === "T") {
       e.preventDefault();
-      triggerSpeech("translated");
+      const trans = ($alphaTranslatedText?.textContent || "").replace(/^—$/, "").trim();
+      if (trans) speakTextClient(trans, activeLang);
     } else if (key === "S") {
       e.preventDefault();
-      triggerSpeech("original");
+      const sent = ($alphaSentenceText?.textContent || "").replace(/^—$/, "").trim();
+      if (sent) speakTextClient(sent, "English");
     } else if (key === "C") {
       e.preventDefault();
       postBufferAction("clear_word");
@@ -1292,34 +2157,19 @@ function setupEventListeners() {
       postBufferAction("reset");
     } else if (key === "ESCAPE") {
       closeShortcutsModal();
-    } else if (key === "Q" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      quitApplication();
+      closeSettingsModal();
     } else if (KEY_TO_LANG[e.key]) {
       e.preventDefault();
       setLanguage(KEY_TO_LANG[e.key]);
     }
   });
 
-  // Lifecycle Listeners: send beacon on tab/window close
-  window.addEventListener("beforeunload", () => {
-    try {
-      navigator.sendBeacon(getApiUrl("/api/client-disconnect"));
-    } catch (e) {}
-  });
-
-  window.addEventListener("pagehide", () => {
-    try {
-      navigator.sendBeacon(getApiUrl("/api/client-disconnect"));
-    } catch (e) {}
-  });
-
-  // Heartbeat every 2.5 seconds to keep application alive while window is active
+  // Keep-alive heartbeat every 5s
   setInterval(() => {
     try {
       fetch(getApiUrl("/api/heartbeat"), { method: "POST" }).catch(() => {});
     } catch (e) {}
-  }, 2500);
+  }, 5000);
 }
 
 // ------------------------------------------------------------------ //
@@ -1327,7 +2177,7 @@ function setupEventListeners() {
 // ------------------------------------------------------------------ //
 
 function runDevMockLoop() {
-  console.warn("[DEV] Running in DEV_MOCK_MODE. Synthetic data is active.");
+  console.warn("[DEV] Running in DEV_MOCK_MODE. Synthetic data active.");
   updateSseStatus(true, "DEV MOCK");
   const letters = ["H", "E", "L", "L", "O", "W", "O", "R", "L", "D"];
   let idx = 0;
@@ -1356,17 +2206,687 @@ function runDevMockLoop() {
       alphabet_sentence: "HELLO WORLD ",
       alphabet_translation: "नमस्ते दुनिया",
       alphabet_state: "EMITTED",
+      stability_progress: 1.0,
+      last_stable_letter: letter,
     });
   }, 1500);
+}
+
+// ------------------------------------------------------------------ //
+//  Continuous Learning & Feedback Subsystem                           //
+// ------------------------------------------------------------------ //
+
+let currentFeedbackPredictionId = null;
+let currentFeedbackLetter = null;
+let lastPromptedLetter = null;
+let lastPromptedTime = 0;
+let feedbackDismissTimer = null;
+let isFeedbackOpen = false;
+let latestPredictionId = null;
+let latestPredictedLetter = "--";
+let selectedCorrectionLetter = null;
+let isSessionTerminated = false;
+
+function initFeedbackWidget() {
+  const $grid = document.getElementById("feedback-az-grid");
+  if ($grid && $grid.children.length === 0) {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    letters.forEach((char) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-az-choice";
+      btn.textContent = char;
+      btn.addEventListener("click", () => submitCorrection(char));
+      $grid.appendChild(btn);
+    });
+  }
+
+  const $btnYes = document.getElementById("btn-feedback-yes");
+  const $btnNo = document.getElementById("btn-feedback-no");
+  const $btnSkip = document.getElementById("btn-feedback-skip");
+  const $btnDismiss = document.getElementById("btn-feedback-dismiss");
+
+  if ($btnYes) $btnYes.addEventListener("click", confirmPrediction);
+  if ($btnNo) $btnNo.addEventListener("click", showAlphabetPicker);
+  if ($btnSkip) $btnSkip.addEventListener("click", dismissFeedbackWidget);
+  if ($btnDismiss) $btnDismiss.addEventListener("click", dismissFeedbackWidget);
+
+  // Bind settings toggles and actions
+  const $persToggle = document.getElementById("setting-personal-learning-toggle");
+  const $globToggle = document.getElementById("setting-global-optin-toggle");
+  const $btnResetPers = document.getElementById("btn-reset-personal-learning");
+
+  if ($persToggle) {
+    $persToggle.addEventListener("change", () => {
+      updateLearningPreferences({ personalization_enabled: $persToggle.checked });
+    });
+  }
+
+  if ($globToggle) {
+    $globToggle.addEventListener("change", () => {
+      if ($globToggle.checked) {
+        fetch(getApiUrl("/api/v2/learning/global-consent"), {
+          method: "POST",
+          headers: getFeedbackHeaders(),
+        })
+          .then((r) => {
+            checkResponseSessionToken(r);
+            return r.json();
+          })
+          .then((d) => {
+            showToast("Global dataset contribution enabled. Thank you!", "info");
+            fetchLearningStats();
+          })
+          .catch((e) => console.error("Consent error:", e));
+      } else {
+        fetch(getApiUrl("/api/v2/learning/global-consent"), {
+          method: "DELETE",
+          headers: getFeedbackHeaders(),
+        })
+          .then((r) => {
+            checkResponseSessionToken(r);
+            return r.json();
+          })
+          .then((d) => {
+            showToast("Global dataset contribution disabled.", "info");
+            fetchLearningStats();
+          })
+          .catch((e) => console.error("Consent revocation error:", e));
+      }
+    });
+  }
+
+  if ($btnResetPers) {
+    $btnResetPers.addEventListener("click", () => {
+      if (confirm("Are you sure you want to erase all your personal learning corrections? This cannot be undone.")) {
+        fetch(getApiUrl("/api/v2/learning/personal-data"), {
+          method: "DELETE",
+          headers: getFeedbackHeaders(),
+        })
+          .then((r) => {
+            checkResponseSessionToken(r);
+            return r.json();
+          })
+          .then((d) => {
+            showToast("Personal learning data successfully erased.", "info");
+            fetchLearningStats();
+          })
+          .catch((e) => console.error("Reset error:", e));
+      }
+    });
+  }
+}
+
+function handleFeedbackOpportunity(data) {
+  if (data && data.session_token) {
+    saveFeedbackSessionToken(data.session_token);
+  }
+  if (isFeedbackOpen) return;
+
+  const letter = data.last_stable_letter || data.fused_prediction || data.prediction;
+  const predId = data.prediction_id;
+  const conf = data.fused_confidence || data.confidence || 0.0;
+
+  if (!letter || letter === "--" || letter === "None" || letter.length !== 1) return;
+  if (!predId) return;
+
+  const now = Date.now();
+  // Don't ask about the same letter within 12 seconds, or if recently dismissed
+  if (letter === lastPromptedLetter && now - lastPromptedTime < 12000) return;
+  if (now - lastPromptedTime < 8000) return;
+
+  showFeedbackWidget(letter, conf, predId);
+}
+
+function showFeedbackWidget(letter, confidence, predictionId) {
+  currentFeedbackPredictionId = predictionId;
+  currentFeedbackLetter = letter;
+  lastPromptedLetter = letter;
+  lastPromptedTime = Date.now();
+  isFeedbackOpen = true;
+
+  const $widget = document.getElementById("feedback-widget");
+  const $predChar = document.getElementById("feedback-pred-char");
+  const $confVal = document.getElementById("feedback-conf-val");
+  const $initialActions = document.getElementById("feedback-initial-actions");
+  const $azSelector = document.getElementById("feedback-alphabet-selector");
+  const $ack = document.getElementById("feedback-acknowledgement");
+
+  if (!$widget) return;
+
+  if ($predChar) $predChar.textContent = letter;
+  if ($confVal) $confVal.textContent = `${Math.round(confidence * 100)}%`;
+
+  if ($initialActions) $initialActions.style.display = "flex";
+  if ($azSelector) $azSelector.style.display = "none";
+  if ($ack) $ack.style.display = "none";
+
+  $widget.style.display = "block";
+
+  // Auto-dismiss after 12 seconds if user ignores
+  if (feedbackDismissTimer) clearTimeout(feedbackDismissTimer);
+  feedbackDismissTimer = setTimeout(() => {
+    dismissFeedbackWidget();
+  }, 12000);
+}
+
+function confirmPrediction() {
+  if (!currentFeedbackPredictionId) return;
+
+  fetch(getApiUrl("/api/v2/feedback/confirm"), {
+    method: "POST",
+    headers: getFeedbackHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ prediction_id: currentFeedbackPredictionId }),
+  })
+    .then((r) => {
+      checkResponseSessionToken(r);
+      return r.json();
+    })
+    .then(() => {
+      showFeedbackAcknowledgement("Prediction confirmed. Accuracy recorded!");
+      fetchLearningStats();
+      setTimeout(dismissFeedbackWidget, 2500);
+    })
+    .catch((err) => {
+      console.warn("Feedback confirm error:", err);
+      dismissFeedbackWidget();
+    });
+}
+
+function showAlphabetPicker() {
+  if (feedbackDismissTimer) clearTimeout(feedbackDismissTimer);
+  const $initialActions = document.getElementById("feedback-initial-actions");
+  const $azSelector = document.getElementById("feedback-alphabet-selector");
+
+  if ($initialActions) $initialActions.style.display = "none";
+  if ($azSelector) $azSelector.style.display = "block";
+}
+
+function submitCorrection(actualLetter) {
+  if (!currentFeedbackPredictionId) return;
+
+  fetch(getApiUrl("/api/v2/feedback/correct"), {
+    method: "POST",
+    headers: getFeedbackHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      prediction_id: currentFeedbackPredictionId,
+      actual_label: actualLetter,
+    }),
+  })
+    .then((r) => {
+      checkResponseSessionToken(r);
+      return r.json();
+    })
+    .then((res) => {
+      const msg = res.message || "Correction saved. Thank you for helping improve recognition.";
+      showFeedbackAcknowledgement(msg);
+      fetchLearningStats();
+      setTimeout(dismissFeedbackWidget, 3000);
+    })
+    .catch((err) => {
+      console.warn("Correction submission error:", err);
+      dismissFeedbackWidget();
+    });
+}
+
+function showFeedbackAcknowledgement(text) {
+  const $azSelector = document.getElementById("feedback-alphabet-selector");
+  const $initialActions = document.getElementById("feedback-initial-actions");
+  const $ack = document.getElementById("feedback-acknowledgement");
+  const $ackText = document.getElementById("feedback-ack-text");
+
+  if ($azSelector) $azSelector.style.display = "none";
+  if ($initialActions) $initialActions.style.display = "none";
+  if ($ackText) $ackText.textContent = text;
+  if ($ack) $ack.style.display = "flex";
+}
+
+function dismissFeedbackWidget() {
+  if (feedbackDismissTimer) {
+    clearTimeout(feedbackDismissTimer);
+    feedbackDismissTimer = null;
+  }
+  const $widget = document.getElementById("feedback-widget");
+  if ($widget) $widget.style.display = "none";
+  isFeedbackOpen = false;
+  currentFeedbackPredictionId = null;
+}
+
+function fetchLearningStats() {
+  fetch(getApiUrl("/api/v2/feedback/stats"), {
+    headers: getFeedbackHeaders(),
+  })
+    .then((r) => {
+      checkResponseSessionToken(r);
+      return r.json();
+    })
+    .then((data) => {
+      if (data && data.stats) {
+        const s = data.stats;
+        const $rev = document.getElementById("stat-reviewed-count");
+        const $conf = document.getElementById("stat-confirmed-count");
+        const $corr = document.getElementById("stat-corrected-count");
+        const $glob = document.getElementById("stat-global-count");
+
+        if ($rev) $rev.textContent = s.total_reviewed || 0;
+        if ($conf) $conf.textContent = s.correct_confirmations || 0;
+        if ($corr) $corr.textContent = s.incorrect_corrections || 0;
+        if ($glob) $glob.textContent = s.global_contributions_total || 0;
+      }
+    })
+    .catch(() => {});
+}
+
+function loadLearningPreferences() {
+  fetch(getApiUrl("/api/v2/learning/preferences"), {
+    headers: getFeedbackHeaders(),
+  })
+    .then((r) => {
+      checkResponseSessionToken(r);
+      return r.json();
+    })
+    .then((data) => {
+      if (data && data.ok) {
+        const $pers = document.getElementById("setting-personal-learning-toggle");
+        const $glob = document.getElementById("setting-global-optin-toggle");
+        if ($pers && data.personalization_enabled !== undefined) {
+          $pers.checked = Boolean(data.personalization_enabled);
+        }
+        if ($glob && data.global_contribution_enabled !== undefined) {
+          $glob.checked = Boolean(data.global_contribution_enabled);
+        }
+      }
+    })
+    .catch(() => {});
+}
+
+function updateLearningPreferences(prefs) {
+  fetch(getApiUrl("/api/v2/learning/preferences"), {
+    method: "PUT",
+    headers: getFeedbackHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(prefs),
+  })
+    .then((r) => {
+      checkResponseSessionToken(r);
+      return r.json();
+    })
+    .then(() => fetchLearningStats())
+    .catch(() => {});
+}
+
+// ------------------------------------------------------------------ //
+//  Incorrect Prediction Correction Subsystem                         //
+// ------------------------------------------------------------------ //
+
+function initCorrectionModal() {
+  const $grid = document.getElementById("correction-az-buttons");
+  const $select = document.getElementById("correction-select-letter");
+
+  if ($grid && $grid.children.length === 0) {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    letters.forEach((char) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn-az-btn";
+      btn.dataset.char = char;
+      btn.textContent = char;
+      btn.setAttribute("aria-label", `Select letter ${char}`);
+      btn.addEventListener("click", () => selectCorrectionLetter(char));
+      $grid.appendChild(btn);
+    });
+  }
+
+  if ($select && $select.children.length <= 1) {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    letters.forEach((char) => {
+      const opt = document.createElement("option");
+      opt.value = char;
+      opt.textContent = `Letter ${char}`;
+      $select.appendChild(opt);
+    });
+    $select.addEventListener("change", (e) => {
+      if (e.target.value) {
+        selectCorrectionLetter(e.target.value);
+      }
+    });
+  }
+
+  // Bind correction modal controls
+  const $btnCorrect = document.getElementById("btn-correct-prediction");
+  const $btnCloseCorr = document.getElementById("btn-close-correction");
+  const $btnCancelCorr = document.getElementById("btn-cancel-correction");
+  const $btnSubmitCorr = document.getElementById("btn-submit-correction");
+  const $modalCorr = document.getElementById("modal-correction");
+
+  if ($btnCorrect) $btnCorrect.addEventListener("click", openCorrectionModal);
+  if ($btnCloseCorr) $btnCloseCorr.addEventListener("click", closeCorrectionModal);
+  if ($btnCancelCorr) $btnCancelCorr.addEventListener("click", closeCorrectionModal);
+  if ($btnSubmitCorr) $btnSubmitCorr.addEventListener("click", submitUserCorrection);
+  if ($modalCorr) {
+    $modalCorr.addEventListener("click", (e) => {
+      if (e.target === $modalCorr) closeCorrectionModal();
+    });
+  }
+
+  // Bind quit website modal controls
+  const $btnQuit = document.getElementById("btn-quit-app");
+  const $btnCloseQuit = document.getElementById("btn-close-quit-modal");
+  const $btnCancelQuit = document.getElementById("btn-cancel-quit");
+  const $btnConfirmQuit = document.getElementById("btn-confirm-quit");
+  const $modalQuit = document.getElementById("modal-quit-confirm");
+  const $btnReturnApp = document.getElementById("btn-return-to-app");
+
+  if ($btnQuit) $btnQuit.addEventListener("click", openQuitConfirmModal);
+  if ($btnCloseQuit) $btnCloseQuit.addEventListener("click", closeQuitConfirmModal);
+  if ($btnCancelQuit) $btnCancelQuit.addEventListener("click", closeQuitConfirmModal);
+  if ($btnConfirmQuit) $btnConfirmQuit.addEventListener("click", performCompleteSessionQuit);
+  if ($modalQuit) {
+    $modalQuit.addEventListener("click", (e) => {
+      if (e.target === $modalQuit) closeQuitConfirmModal();
+    });
+  }
+  if ($btnReturnApp) {
+    $btnReturnApp.addEventListener("click", () => {
+      window.location.reload();
+    });
+  }
+
+  // Global ESC key listener for modals
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeCorrectionModal();
+      closeQuitConfirmModal();
+    }
+  });
+}
+
+function openCorrectionModal() {
+  if (isSessionTerminated) return;
+  const $modal = document.getElementById("modal-correction");
+  const $origGlyph = document.getElementById("correction-original-glyph");
+  const $targetGlyph = document.getElementById("correction-target-glyph");
+  const $predIdNote = document.getElementById("correction-pred-id-note");
+  const $statusMsg = document.getElementById("correction-status-msg");
+  const $submitBtn = document.getElementById("btn-submit-correction");
+  const $select = document.getElementById("correction-select-letter");
+
+  if (!$modal) return;
+
+  selectedCorrectionLetter = null;
+  if ($targetGlyph) $targetGlyph.textContent = "?";
+  if ($submitBtn) {
+    $submitBtn.disabled = true;
+    $submitBtn.textContent = "Submit Correction";
+  }
+  if ($select) $select.value = "";
+
+  document.querySelectorAll("#correction-az-buttons .btn-az-btn").forEach((b) => b.classList.remove("selected"));
+
+  // Pre-fill original predicted sign (e.g. F)
+  const predLetter = (latestPredictedLetter && latestPredictedLetter !== "--")
+    ? latestPredictedLetter
+    : (latestConfirmedLetter !== "--" ? latestConfirmedLetter : (latestRawPrediction || "--"));
+  if ($origGlyph) $origGlyph.textContent = predLetter;
+
+  const activePid = latestPredictionId || currentFeedbackPredictionId;
+  if (activePid) {
+    if ($predIdNote) $predIdNote.textContent = `Pred ID: ${activePid}`;
+    if ($statusMsg) {
+      $statusMsg.style.display = "none";
+      $statusMsg.className = "correction-status-message";
+      $statusMsg.textContent = "";
+    }
+  } else {
+    if ($predIdNote) $predIdNote.textContent = "No prediction recorded yet";
+    if ($statusMsg) {
+      $statusMsg.style.display = "block";
+      $statusMsg.className = "correction-status-message info";
+      $statusMsg.textContent = "A prediction must first be recorded before it can be corrected. Perform a sign in front of the camera first.";
+    }
+  }
+
+  $modal.style.display = "flex";
+}
+
+function closeCorrectionModal() {
+  const $modal = document.getElementById("modal-correction");
+  if ($modal) $modal.style.display = "none";
+}
+
+function selectCorrectionLetter(letter) {
+  if (!letter || letter.length !== 1) return;
+  selectedCorrectionLetter = letter.toUpperCase();
+
+  const $targetGlyph = document.getElementById("correction-target-glyph");
+  const $submitBtn = document.getElementById("btn-submit-correction");
+  const $select = document.getElementById("correction-select-letter");
+
+  if ($targetGlyph) $targetGlyph.textContent = selectedCorrectionLetter;
+  if ($select) $select.value = selectedCorrectionLetter;
+
+  document.querySelectorAll("#correction-az-buttons .btn-az-btn").forEach((b) => {
+    b.classList.toggle("selected", b.dataset.char === selectedCorrectionLetter);
+  });
+
+  const activePid = latestPredictionId || currentFeedbackPredictionId;
+  if ($submitBtn) {
+    $submitBtn.disabled = !activePid || !selectedCorrectionLetter;
+  }
+}
+
+async function submitUserCorrection() {
+  const activePid = latestPredictionId || currentFeedbackPredictionId;
+  const $submitBtn = document.getElementById("btn-submit-correction");
+  const $statusMsg = document.getElementById("correction-status-msg");
+
+  if (!activePid) {
+    if ($statusMsg) {
+      $statusMsg.style.display = "block";
+      $statusMsg.className = "correction-status-message error";
+      $statusMsg.textContent = "A prediction must first be recorded before it can be corrected.";
+    }
+    return;
+  }
+
+  if (!selectedCorrectionLetter) {
+    if ($statusMsg) {
+      $statusMsg.style.display = "block";
+      $statusMsg.className = "correction-status-message error";
+      $statusMsg.textContent = "Please select the correct sign (A–Z).";
+    }
+    return;
+  }
+
+  if ($submitBtn) {
+    $submitBtn.disabled = true;
+    $submitBtn.textContent = "Submitting...";
+  }
+
+  try {
+    const res = await fetch(getApiUrl("/api/v2/feedback/correct"), {
+      method: "POST",
+      headers: getFeedbackHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        prediction_id: activePid,
+        actual_label: selectedCorrectionLetter,
+      }),
+    });
+
+    checkResponseSessionToken(res);
+    const data = await res.json();
+
+    if (res.ok && data.ok) {
+      const origChar = document.getElementById("correction-original-glyph")?.textContent || "--";
+      const successMsg = `Correction submitted: ${origChar} ➔ ${selectedCorrectionLetter}. Learning engine updated!`;
+      if ($statusMsg) {
+        $statusMsg.style.display = "block";
+        $statusMsg.className = "correction-status-message success";
+        $statusMsg.textContent = successMsg;
+      }
+      showToast(successMsg, "success");
+      fetchLearningStats();
+
+      // Update dashboard confirmed letter with user's verified correction
+      latestConfirmedLetter = selectedCorrectionLetter;
+      if ($alphaStableChar) {
+        $alphaStableChar.textContent = selectedCorrectionLetter;
+      }
+
+      setTimeout(() => {
+        closeCorrectionModal();
+        if ($submitBtn) {
+          $submitBtn.textContent = "Submit Correction";
+        }
+      }, 1600);
+    } else {
+      const errMsg = data.error || "Failed to submit correction.";
+      if ($statusMsg) {
+        $statusMsg.style.display = "block";
+        $statusMsg.className = "correction-status-message error";
+        $statusMsg.textContent = errMsg;
+      }
+      showToast(errMsg, "error");
+      if ($submitBtn) {
+        $submitBtn.disabled = false;
+        $submitBtn.textContent = "Submit Correction";
+      }
+    }
+  } catch (err) {
+    const errMsg = err.message || "Network error submitting correction.";
+    if ($statusMsg) {
+      $statusMsg.style.display = "block";
+      $statusMsg.className = "correction-status-message error";
+      $statusMsg.textContent = errMsg;
+    }
+    showToast(errMsg, "error");
+    if ($submitBtn) {
+      $submitBtn.disabled = false;
+      $submitBtn.textContent = "Submit Correction";
+    }
+  }
+}
+
+// ------------------------------------------------------------------ //
+//  Quit Website Session Subsystem                                     //
+// ------------------------------------------------------------------ //
+
+function openQuitConfirmModal() {
+  const $modal = document.getElementById("modal-quit-confirm");
+  if ($modal) $modal.style.display = "flex";
+}
+
+function closeQuitConfirmModal() {
+  const $modal = document.getElementById("modal-quit-confirm");
+  if ($modal) $modal.style.display = "none";
+}
+
+function performCompleteSessionQuit() {
+  closeQuitConfirmModal();
+
+  // 1. Mark session as permanently terminated
+  isSessionTerminated = true;
+  streamingActive = false;
+
+  // 2. Stop camera tracks and release media
+  if (streamLoopTimer) {
+    clearTimeout(streamLoopTimer);
+    streamLoopTimer = null;
+  }
+  if (browserWebcamStream) {
+    browserWebcamStream.getTracks().forEach((t) => {
+      try { t.stop(); } catch (e) {}
+    });
+    browserWebcamStream = null;
+  }
+  const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
+  if (videoEl) {
+    videoEl.pause();
+    videoEl.srcObject = null;
+  }
+  if ($cameraImg) {
+    $cameraImg.src = "";
+    $cameraImg.style.display = "none";
+  }
+
+  // 3. Invalidate in-flight inference responses
+  monotonicFrameSeq += 100000;
+  lastCommittedFrameSeq = monotonicFrameSeq;
+
+  // 4. Cancel browser speech & audio
+  try {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  } catch (e) {}
+
+  // 5. Close SSE connection & network listeners
+  disconnectSSE();
+  clearTimeout(heartbeatTimer);
+  clearTimeout(feedbackDismissTimer);
+
+  // 6. Dismiss any open widgets/modals
+  dismissFeedbackWidget();
+  closeCorrectionModal();
+  closeSettingsModal();
+  closeShortcutsModal();
+
+  // 7. Show fullscreen Exit Screen
+  const $exitScreen = document.getElementById("exit-screen");
+  if ($exitScreen) {
+    $exitScreen.style.display = "flex";
+  }
+
+  // 8. Attempt tab close if permissible
+  try {
+    window.close();
+  } catch (e) {}
+}
+
+// ------------------------------------------------------------------ //
+//  Session Provisioning & Synchronization Subsystem                  //
+// ------------------------------------------------------------------ //
+
+async function initSessionToken() {
+  try {
+    const res = await fetch(getApiUrl("/api/v2/session"), {
+      method: "POST",
+      headers: getFeedbackHeaders({ "Content-Type": "application/json" }),
+    });
+    checkResponseSessionToken(res);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.session_token) {
+        saveFeedbackSessionToken(data.session_token);
+      }
+    }
+  } catch (err) {
+    console.debug("[Session Init Warning]", err);
+  }
 }
 
 // ------------------------------------------------------------------ //
 //  Application Initialization                                         //
 // ------------------------------------------------------------------ //
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  await initSessionToken();
+  loadPersistedSettings();
   setupEventListeners();
+  initFeedbackWidget();
+  initCorrectionModal();
   loadVoiceCatalog();
   connectSSE();
   checkEnvironmentAndInitWebcam();
+
+  // If voices list is async on Chrome, bind event
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      updateVoiceBadgeUI(activeLang);
+    };
+  }
+});
+
+// Safe cleanup on window unload
+window.addEventListener("beforeunload", () => {
+  disconnectSSE();
 });

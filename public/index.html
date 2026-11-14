@@ -65,17 +65,22 @@
       </div>
 
       <div class="header-actions">
-        <button class="btn-header-secondary" id="btn-backend-settings" type="button" title="Configure Backend Server URL">
+        <button class="btn-header-secondary" id="btn-backend-settings" type="button" title="Configure Backend Server URL &amp; Preferences">
           <span class="action-icon">⚙️</span>
-          <span class="action-text">Backend</span>
+          <span class="action-text">Settings</span>
         </button>
         <button class="btn-header-secondary" id="btn-toggle-shortcuts" type="button" title="View Keyboard Shortcuts &amp; Guide">
           <span class="action-icon">⌨️</span>
           <span class="action-text">Shortcuts</span>
         </button>
-        <button class="btn-header-danger" id="btn-quit-app" type="button" title="Gracefully terminate server and release camera">
-          <span class="action-icon">⏻</span>
-          <span>Quit App</span>
+        <button class="btn-header-cam running" id="btn-session-toggle" type="button" title="Stop camera stream and freeze recognition">
+          <span class="action-icon" id="session-btn-icon">⏹</span>
+          <span id="session-btn-text">STOP CAMERA</span>
+        </button>
+        <button class="btn-header-quit" id="btn-quit-app" type="button" title="End current website session and release all resources" aria-label="Quit Website / Quit App">
+          <span class="action-icon">🚪</span>
+          <span>QUIT WEBSITE</span>
+          <span class="sr-only" style="display:none;">Quit App</span>
         </button>
       </div>
     </div>
@@ -99,9 +104,6 @@
           </div>
           <div class="card-header-tools">
             <span class="fps-counter" id="fps-badge">FPS: --</span>
-            <button class="btn-cam-toggle" id="btn-toggle-camera" type="button" title="Start or Pause Webcam Feed">
-              📷 Pause Camera
-            </button>
             <button class="hud-toggle-btn" id="btn-toggle-hud" type="button" title="Toggle HUD telemetry overlay">
               HUD: ON
             </button>
@@ -125,6 +127,13 @@
               class="camera-stream"
               style="display:none; transform: scaleX(-1); object-fit: cover; width: 100%; height: 100%;"
             ></video>
+            <canvas
+              id="landmark-overlay-canvas"
+              width="640"
+              height="480"
+              class="camera-stream"
+              style="display:none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; transform: scaleX(-1); object-fit: cover;"
+            ></canvas>
 
             <!-- Visual Loading Skeleton -->
             <div class="camera-loading" id="camera-loading" style="display:none;">
@@ -142,6 +151,7 @@
                   CLOUD WEBCAM
                 </span>
                 <span class="hud-chip metric-chip" id="hud-fps-pill">FPS: --</span>
+                <span class="hud-chip metric-chip" id="hud-latency-pill" title="Network Round-Trip Time">RTT: --ms</span>
               </div>
               <div class="hud-top-right">
                 <span class="hud-chip hand-chip" id="hud-hand-pill">
@@ -366,15 +376,21 @@
                 <span class="conf-score" id="alpha-conf-num">0%</span>
               </div>
             </div>
+            <button class="btn-commit-sign" id="btn-commit-sign" type="button" title="Manually append currently recognized sign to word buffer">
+              <span>+ Commit Sign</span>
+            </button>
+            <button class="btn-correct-sign" id="btn-correct-prediction" type="button" title="Wrong prediction? Click to submit the correct sign to feedback learning">
+              <span>Wrong Prediction? Correct it</span>
+            </button>
           </div>
 
           <!-- Latch Progress & Debounce Telemetry -->
           <div class="hero-latch-cell">
             <div class="latch-subcell">
-              <span class="cell-subhead">STABLE CANDIDATE</span>
+              <span class="cell-subhead">LAST CONFIRMED</span>
               <div class="latch-glyph-wrap">
                 <span class="latch-glyph" id="alpha-stable-char">--</span>
-                <span class="latch-note">Debouncing</span>
+                <span class="latch-note" id="alpha-stable-note">Persistent</span>
               </div>
             </div>
 
@@ -447,17 +463,29 @@
                 <span class="trans-voice-badge" id="alpha-voice-badge">Voice: Checking...</span>
               </div>
 
-              <!-- Dedicated Audio Synthesis Actions -->
+              <!-- Dedicated Audio Synthesis Actions & Manual Translate -->
               <div class="trans-tts-actions">
-                <button class="btn-tts primary" id="btn-alpha-speak-trans" type="button" title="Speak translated text in target language (Shortcut: T)">
+                <button class="btn-tts primary" id="btn-alpha-translate" type="button" title="Manually translate accumulated text now">
+                  <span class="btn-icon">⚡</span>
+                  <span>Translate</span>
+                </button>
+                <button class="btn-tts" id="btn-alpha-speak-trans" type="button" title="Speak translated text in target language (Shortcut: T)">
                   <span class="btn-icon">🔊</span>
-                  <span>Speak Translation</span>
+                  <span>Speak</span>
                   <kbd class="key-badge">T</kbd>
                 </button>
                 <button class="btn-tts secondary" id="btn-alpha-speak-orig" type="button" title="Speak original English sentence (Shortcut: S)">
                   <span class="btn-icon">🗣️</span>
-                  <span>Speak English</span>
+                  <span>English</span>
                   <kbd class="key-badge">S</kbd>
+                </button>
+                <button class="btn-tts subtle" id="btn-alpha-stop-speech" type="button" title="Stop ongoing speech audio">
+                  <span class="btn-icon">⏹</span>
+                  <span>Stop</span>
+                </button>
+                <button class="btn-tts subtle" id="btn-alpha-replay-speech" type="button" title="Replay last spoken speech">
+                  <span class="btn-icon">🔁</span>
+                  <span>Replay</span>
                 </button>
               </div>
             </div>
@@ -757,6 +785,299 @@
       <h2>ISL Translator Closed</h2>
       <p>The camera stream has been released and all background worker processes have terminated cleanly.</p>
       <p class="shutdown-sub">You may now close this browser tab or window safely.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SETTINGS MODAL                                               -->
+  <!-- ============================================================ -->
+  <div class="modal-backdrop" id="modal-settings" style="display:none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon">⚙️</span>
+          <h3 class="modal-title">System &amp; Connection Settings</h3>
+        </div>
+        <button class="modal-close-btn" id="btn-close-settings" type="button" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-group">
+          <label class="settings-label" for="setting-backend-url">Backend Server URL</label>
+          <div class="settings-input-row">
+            <input type="text" id="setting-backend-url" class="settings-input" placeholder="e.g. https://isl-recognition-backend.onrender.com" />
+            <button class="btn-ping" id="btn-ping-backend" type="button">Test Ping</button>
+          </div>
+          <div class="ping-status-row" id="ping-status-row" style="display:none;">
+            <span class="ping-dot" id="ping-dot"></span>
+            <span class="ping-text" id="ping-text">Testing latency...</span>
+          </div>
+          <span class="settings-hint">Leave blank to default to current host origin on localhost or Render backend in cloud.</span>
+        </div>
+
+        <div class="settings-group">
+          <label class="settings-label">Video Stream Mirroring</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="setting-mirror-toggle" checked />
+            <span class="slider"></span>
+            <span class="toggle-text">Mirror Camera &amp; Skeleton Overlay (Natural Selfie View)</span>
+          </label>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-label-row">
+            <label class="settings-label" for="setting-conf-threshold">Inference Confidence Threshold</label>
+            <span class="settings-val-badge" id="setting-conf-val">60%</span>
+          </div>
+          <input type="range" id="setting-conf-threshold" min="30" max="95" value="60" class="settings-slider" />
+          <span class="settings-hint">Higher values reject ambiguous frames; lower values detect gestures faster.</span>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-label-row">
+            <label class="settings-label" for="setting-fps-target">Target Frame Rate</label>
+            <span class="settings-val-badge" id="setting-fps-val">12 FPS</span>
+          </div>
+          <input type="range" id="setting-fps-target" min="5" max="25" value="12" class="settings-slider" />
+          <span class="settings-hint">Adaptive auto-pacing adjusts dynamically based on network latency.</span>
+        </div>
+
+        <div class="settings-group">
+          <label class="settings-label">Speech Synthesis Engine</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="setting-neural-tts-toggle" />
+            <span class="slider"></span>
+            <span class="toggle-text">Enable Neural Text-to-Speech (MMS-TTS / Research Opt-in)</span>
+          </label>
+          <span class="settings-hint">Requires external language service. Default is high-performance, commercially unrestricted browser Web Speech API.</span>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- CONTINUOUS LEARNING & PRIVACY PREFERENCES                   -->
+        <!-- ============================================================ -->
+        <div class="settings-group settings-group-bordered">
+          <h4 class="settings-subheading">🧠 Continuous Learning &amp; Privacy</h4>
+          
+          <label class="toggle-switch">
+            <input type="checkbox" id="setting-personal-learning-toggle" checked />
+            <span class="slider"></span>
+            <span class="toggle-text">Personal Learning (Adapt to My Signing Nuances)</span>
+          </label>
+          <span class="settings-hint">Your corrections refine recognition locally without altering production model weights.</span>
+
+          <label class="toggle-switch" style="margin-top: 10px;">
+            <input type="checkbox" id="setting-global-optin-toggle" />
+            <span class="slider"></span>
+            <span class="toggle-text">Contribute to Curated Global ISL Dataset (Explicit Opt-in)</span>
+          </label>
+          <span class="settings-hint">Contribute anonymous 3D landmark coordinates to improve shared model checkpoints. Raw webcam video/photos are strictly never collected.</span>
+
+          <!-- Learning Statistics Dashboard -->
+          <div class="learning-stats-panel" id="learning-stats-panel">
+            <h5 class="stats-panel-title">Review &amp; Dataset Statistics</h5>
+            <div class="stats-grid">
+              <div class="stat-box">
+                <span class="stat-num" id="stat-reviewed-count">0</span>
+                <span class="stat-lbl">Predictions Reviewed</span>
+              </div>
+              <div class="stat-box">
+                <span class="stat-num" id="stat-confirmed-count">0</span>
+                <span class="stat-lbl">Confirmations</span>
+              </div>
+              <div class="stat-box">
+                <span class="stat-num" id="stat-corrected-count">0</span>
+                <span class="stat-lbl">Corrections</span>
+              </div>
+              <div class="stat-box">
+                <span class="stat-num" id="stat-global-count">0</span>
+                <span class="stat-lbl">Global Contributions</span>
+              </div>
+            </div>
+            <div class="stats-footer-note">
+              <span>* Accuracy improvements are verified via offline evaluation benchmarks, not simply sample volume.</span>
+            </div>
+          </div>
+
+          <div class="settings-danger-actions" style="margin-top: 12px;">
+            <button class="btn-subtle-danger" id="btn-reset-personal-learning" type="button">
+              <span>Reset My Personal Learning Data</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-action-btn secondary" id="btn-reset-settings" type="button">Reset Defaults</button>
+        <button class="modal-action-btn primary" id="btn-save-settings" type="button">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- HUMAN-IN-THE-LOOP FEEDBACK WIDGET (NON-INTRUSIVE)            -->
+  <!-- ============================================================ -->
+  <aside class="feedback-widget" id="feedback-widget" style="display:none;" aria-live="polite">
+    <div class="feedback-widget-header">
+      <div class="feedback-title-wrap">
+        <span class="feedback-sparkle">🤟</span>
+        <span class="feedback-title">Verify Prediction</span>
+      </div>
+      <button class="feedback-dismiss-btn" id="btn-feedback-dismiss" type="button" aria-label="Dismiss feedback">&times;</button>
+    </div>
+    <div class="feedback-widget-body" id="feedback-widget-body">
+      <div class="feedback-prompt-row">
+        <span class="feedback-label-lead">Detected:</span>
+        <span class="feedback-pred-glyph" id="feedback-pred-char">--</span>
+        <span class="feedback-conf-badge" id="feedback-conf-val">--%</span>
+      </div>
+      <p class="feedback-question">Was this prediction correct?</p>
+      
+      <!-- Primary Actions (Yes / No / Dismiss) -->
+      <div class="feedback-actions" id="feedback-initial-actions">
+        <button class="btn-feedback-action yes" id="btn-feedback-yes" type="button" title="Confirm prediction is correct">
+          <span>✓ Yes</span>
+        </button>
+        <button class="btn-feedback-action no" id="btn-feedback-no" type="button" title="Correct prediction with actual alphabet">
+          <span>✗ No</span>
+        </button>
+        <button class="btn-feedback-action dismiss" id="btn-feedback-skip" type="button" title="Dismiss feedback prompt">
+          <span>Dismiss</span>
+        </button>
+      </div>
+
+      <!-- Alphabet Selection Grid (A-Z) -->
+      <div class="feedback-alphabet-selector" id="feedback-alphabet-selector" style="display:none;">
+        <span class="feedback-picker-heading">What was actually signed?</span>
+        <div class="feedback-az-grid" id="feedback-az-grid">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+
+      <!-- Feedback Confirmation Acknowledgement -->
+      <div class="feedback-acknowledgement" id="feedback-acknowledgement" style="display:none;">
+        <span class="ack-icon">👍</span>
+        <span class="ack-text" id="feedback-ack-text">Correction saved. Thank you for helping improve recognition.</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============================================================ -->
+  <!-- INCORRECT PREDICTION CORRECTION MODAL                         -->
+  <!-- ============================================================ -->
+  <div class="modal-backdrop" id="modal-correction" style="display:none;" role="dialog" aria-labelledby="correction-modal-title" aria-modal="true">
+    <div class="modal-dialog correction-dialog">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon">✏️</span>
+          <h3 class="modal-title" id="correction-modal-title">Correct Sign Prediction</h3>
+        </div>
+        <button class="modal-close-btn" id="btn-close-correction" type="button" aria-label="Close correction modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <p class="modal-lead-desc">
+          Tell us what sign was actually performed so the continuous learning engine can adapt.
+        </p>
+
+        <div class="correction-comparison-grid">
+          <div class="correction-char-box original">
+            <span class="correction-box-label">MODEL PREDICTION</span>
+            <div class="correction-glyph" id="correction-original-glyph">--</div>
+            <span class="correction-note" id="correction-pred-id-note">Pred ID: --</span>
+          </div>
+
+          <div class="correction-arrow">➔</div>
+
+          <div class="correction-char-box target">
+            <span class="correction-box-label">CORRECT SIGN</span>
+            <div class="correction-glyph target" id="correction-target-glyph">?</div>
+            <span class="correction-note">Select letter below</span>
+          </div>
+        </div>
+
+        <div class="correction-picker-wrap">
+          <label class="correction-label" for="correction-select-letter">Select Correct Alphabet (A–Z):</label>
+          <div class="correction-az-grid" id="correction-az-buttons">
+            <!-- Populated dynamically with buttons A to Z -->
+          </div>
+          <!-- Accessible select dropdown fallback for mobile / keyboard screenreaders -->
+          <div class="correction-select-row">
+            <span>Or choose from list:</span>
+            <select class="settings-select" id="correction-select-letter" aria-label="Choose correct sign letter">
+              <option value="">-- Choose Letter (A–Z) --</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="correction-status-message" id="correction-status-msg" style="display:none;" aria-live="polite"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="modal-action-btn secondary" id="btn-cancel-correction" type="button">Cancel</button>
+        <button class="modal-action-btn primary" id="btn-submit-correction" type="button" disabled>Submit Correction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- QUIT WEBSITE CONFIRMATION MODAL                              -->
+  <!-- ============================================================ -->
+  <div class="modal-backdrop" id="modal-quit-confirm" style="display:none;" role="dialog" aria-labelledby="quit-confirm-title" aria-modal="true">
+    <div class="modal-dialog quit-dialog">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span class="modal-icon">🚪</span>
+          <h3 class="modal-title" id="quit-confirm-title">Quit Website Session</h3>
+        </div>
+        <button class="modal-close-btn" id="btn-close-quit-modal" type="button" aria-label="Cancel">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-lead-desc">
+          Are you sure you want to quit the current ISL Translator session?
+        </p>
+        <p class="modal-sub-desc">
+          This will stop all webcam streams, cancel in-flight audio/speech, terminate background listeners, and safely release browser resources. Your saved feedback learning models and global contributions will remain preserved.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-action-btn secondary" id="btn-cancel-quit" type="button">Stay on Website</button>
+        <button class="modal-action-btn danger" id="btn-confirm-quit" type="button">Yes, Quit Session</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- FULLSCREEN EXIT SCREEN                                       -->
+  <!-- ============================================================ -->
+  <div class="exit-screen-overlay" id="exit-screen" style="display:none;" role="region" aria-label="Session Terminated">
+    <div class="exit-screen-card">
+      <div class="exit-brand-badge">
+        <span class="exit-brand-icon">🤟</span>
+        <span class="exit-brand-name">Indian Sign Language Translator</span>
+      </div>
+      <h1 class="exit-screen-title">Thank you for using ISL Translator</h1>
+      <p class="exit-screen-lead">Your current session has ended.</p>
+      <div class="exit-status-box">
+        <div class="exit-status-item">
+          <span class="exit-status-icon">✓</span>
+          <span>Webcam stream and video processing released</span>
+        </div>
+        <div class="exit-status-item">
+          <span class="exit-status-icon">✓</span>
+          <span>Text-to-speech and audio engines stopped</span>
+        </div>
+        <div class="exit-status-item">
+          <span class="exit-status-icon">✓</span>
+          <span>Network connections and background tasks disconnected</span>
+        </div>
+      </div>
+      <p class="exit-screen-instruction">
+        You can safely close this browser tab now.
+      </p>
+      <div class="exit-screen-actions">
+        <button class="btn-return-app" id="btn-return-to-app" type="button">
+          <span class="btn-icon">↺</span>
+          <span>Return to ISL Translator</span>
+        </button>
+      </div>
     </div>
   </div>
 

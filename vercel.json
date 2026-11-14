@@ -18,7 +18,11 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization, X-Requested-With"
+          "value": "Content-Type, Authorization, X-Requested-With, X-Session-Token, X-User-ID, X-Session-ID"
+        },
+        {
+          "key": "Access-Control-Expose-Headers",
+          "value": "X-Session-Token"
         }
       ]
     }

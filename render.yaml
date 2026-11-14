@@ -6,6 +6,10 @@ services:
     plan: standard
     region: oregon
     branch: main
+    disk:
+      name: isl-feedback-storage
+      mountPath: /app/data/feedback
+      sizeGB: 10
     envVars:
       - key: PORT
         value: 5001
@@ -13,4 +17,8 @@ services:
         value: 0.0.0.0
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: FEEDBACK_SECRET_KEY
+        generateValue: true
+      - key: FEEDBACK_DATA_DIR
+        value: /app/data/feedback
     healthCheckPath: /api/status
