@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
   "cleanUrls": true,
+  "framework": null,
   "outputDirectory": "public",
   "headers": [
     {
@@ -23,6 +24,18 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://isl-recognition-backend.onrender.com/api/:match*"
+    },
+    {
+      "source": "/events",
+      "destination": "https://isl-recognition-backend.onrender.com/events"
+    },
+    {
+      "source": "/video_feed",
+      "destination": "https://isl-recognition-backend.onrender.com/video_feed"
+    },
     {
       "source": "/",
       "destination": "/index.html"

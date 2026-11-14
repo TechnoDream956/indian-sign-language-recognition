@@ -28,8 +28,22 @@ const DEV_MOCK_MODE = false;
 //  API & Backend Endpoint Configuration                             //
 // ------------------------------------------------------------------ //
 
+const RENDER_BACKEND_URL = "https://isl-recognition-backend.onrender.com";
+
 function getApiUrl(endpoint) {
-  const base = window.ISL_BACKEND_URL || localStorage.getItem("isl_backend_url") || "";
+  // 1. Explicit window or localStorage override
+  let base = window.ISL_BACKEND_URL || localStorage.getItem("isl_backend_url");
+  if (!base) {
+    const isLocalhost = (
+      typeof window !== "undefined" &&
+      window.location &&
+      (window.location.hostname === "localhost" ||
+       window.location.hostname === "127.0.0.1" ||
+       window.location.protocol === "file:")
+    );
+    // Remote environments (Vercel, custom domain) default to Render backend
+    base = isLocalhost ? "" : RENDER_BACKEND_URL;
+  }
   if (!base) return endpoint;
   const cleanBase = base.replace(/\/+$/, "");
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
@@ -427,7 +441,19 @@ function stopFrameStreaming() {
 
 async function checkEnvironmentAndInitWebcam() {
   const urlParams = new URLSearchParams(window.location.search);
-  const forceCloud = urlParams.get("mode") === "cloud" || window.FORCE_CLOUD_CAMERA === true;
+  const isRemote = (
+    typeof window !== "undefined" &&
+    window.location &&
+    window.location.hostname !== "localhost" &&
+    window.location.hostname !== "127.0.0.1" &&
+    window.location.protocol !== "file:"
+  );
+  const forceCloud = urlParams.get("mode") === "cloud" || window.FORCE_CLOUD_CAMERA === true || isRemote;
+
+  // On remote environments (e.g. Vercel), trigger browser webcam immediately
+  if (forceCloud) {
+    enableCloudWebcamMode();
+  }
 
   try {
     const res = await fetch(getApiUrl("/api/status"));
@@ -438,6 +464,15 @@ async function checkEnvironmentAndInitWebcam() {
       }
     }
   } catch (err) {
+    try {
+      const hRes = await fetch(getApiUrl("/api/healthz"));
+      if (hRes.ok) {
+        const hData = await hRes.json();
+        if (hData.cloud_mode || forceCloud) {
+          enableCloudWebcamMode();
+        }
+      }
+    } catch (e) {}
     if (forceCloud) {
       enableCloudWebcamMode();
     }
