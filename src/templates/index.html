@@ -116,6 +116,14 @@
               alt="Live webcam stream with MediaPipe hand landmark tracking"
               class="camera-stream"
             />
+            <video
+              id="browser-webcam-video"
+              autoplay
+              playsinline
+              muted
+              class="camera-stream"
+              style="display:none; transform: scaleX(-1); object-fit: cover; width: 100%; height: 100%;"
+            ></video>
 
             <!-- Visual Loading Skeleton -->
             <div class="camera-loading" id="camera-loading" style="display:none;">
@@ -128,6 +136,9 @@
               <div class="hud-top-left">
                 <span class="hud-chip live-chip" id="hud-live-pill">
                   <span class="hud-live-dot"></span> LIVE
+                </span>
+                <span class="hud-chip mode-chip" id="hud-mode-pill" style="display:none;">
+                  CLOUD WEBCAM
                 </span>
                 <span class="hud-chip metric-chip" id="hud-fps-pill">FPS: --</span>
               </div>

@@ -59,6 +59,7 @@ const KEY_TO_LANG = {
 
 // Camera & Viewport
 const $cameraImg            = document.getElementById("camera-img");
+const $browserWebcamVideo   = document.getElementById("browser-webcam-video");
 const $cameraHud            = document.getElementById("camera-hud");
 const $btnToggleHud         = document.getElementById("btn-toggle-hud");
 const $btnToggleCamera      = document.getElementById("btn-toggle-camera");
@@ -67,6 +68,7 @@ const $cameraOverlayMsg     = document.getElementById("camera-overlay-msg");
 const $btnReconnectStream   = document.getElementById("btn-reconnect-stream");
 const $cameraLoading        = document.getElementById("camera-loading");
 const $liveIndicator        = document.getElementById("live-indicator");
+const $hudModePill          = document.getElementById("hud-mode-pill");
 const $fpsBadge             = document.getElementById("fps-badge");
 const $hudFpsPill           = document.getElementById("hud-fps-pill");
 const $hudHandPill          = document.getElementById("hud-hand-pill");
@@ -289,6 +291,160 @@ function updateSseStatus(isLive, labelText) {
 }
 
 // ------------------------------------------------------------------ //
+//  Cloud Browser Webcam Architecture                                 //
+// ------------------------------------------------------------------ //
+
+let isCloudMode = false;
+let browserWebcamStream = null;
+let browserWebcamStreamingInterval = null;
+let isStreamingFrame = false;
+let browserWebcamCanvas = null;
+
+async function enableCloudWebcamMode() {
+  if (isCloudMode && browserWebcamStream) return;
+  isCloudMode = true;
+
+  console.log("[Camera] Enabling Cloud Browser Webcam mode...");
+  if ($cameraHintText) {
+    $cameraHintText.textContent = "Cloud Mode: Streaming browser webcam frames to server inference engine";
+  }
+  if ($hudModePill) {
+    $hudModePill.style.display = "inline-flex";
+    $hudModePill.textContent = "CLOUD WEBCAM";
+  }
+
+  const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
+  if (!videoEl) {
+    console.error("[Camera] browser-webcam-video element not found in DOM");
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast("Browser webcam API not supported on this browser.", "error");
+    if ($cameraOverlay && $cameraOverlayMsg) {
+      $cameraOverlay.style.display = "flex";
+      $cameraOverlayMsg.textContent = "Browser webcam API not supported on this device/browser.";
+    }
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        facingMode: "user"
+      },
+      audio: false
+    });
+
+    browserWebcamStream = stream;
+    videoEl.srcObject = stream;
+    await videoEl.play();
+    videoEl.style.display = "block";
+
+    if ($cameraImg) {
+      $cameraImg.style.display = "none";
+    }
+    if ($cameraLoading) {
+      $cameraLoading.style.display = "none";
+    }
+    if ($cameraOverlay) {
+      $cameraOverlay.style.display = "none";
+    }
+
+    showToast("Webcam connected. Streaming frames to AI engine.", "success");
+    startFrameStreaming(videoEl);
+  } catch (err) {
+    console.warn("[Camera] getUserMedia failed:", err);
+    if ($cameraOverlay) {
+      $cameraOverlay.style.display = "flex";
+      if ($cameraOverlayMsg) {
+        $cameraOverlayMsg.textContent = "Webcam access required in cloud mode. Click Reconnect to grant permission.";
+      }
+    }
+    showToast("Webcam permission denied: " + err.message, "error");
+  }
+}
+
+function startFrameStreaming(videoEl) {
+  if (browserWebcamStreamingInterval) {
+    clearInterval(browserWebcamStreamingInterval);
+  }
+
+  if (!browserWebcamCanvas) {
+    browserWebcamCanvas = document.createElement("canvas");
+    browserWebcamCanvas.width = 640;
+    browserWebcamCanvas.height = 480;
+  }
+  const ctx = browserWebcamCanvas.getContext("2d");
+
+  // Ingest frames every 80ms (~12.5 FPS)
+  browserWebcamStreamingInterval = setInterval(() => {
+    if (isStreamingFrame || !videoEl || videoEl.paused || videoEl.ended || !videoEl.videoWidth) {
+      return;
+    }
+    isStreamingFrame = true;
+
+    try {
+      ctx.drawImage(videoEl, 0, 0, 640, 480);
+      browserWebcamCanvas.toBlob(async (blob) => {
+        if (!blob) {
+          isStreamingFrame = false;
+          return;
+        }
+        try {
+          const res = await fetch(getApiUrl("/api/camera/frame"), {
+            method: "POST",
+            headers: { "Content-Type": "image/jpeg" },
+            body: blob,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.state) {
+              applyState(data.state);
+            }
+          }
+        } catch (postErr) {
+          console.debug("[Frame Ingest Warning]", postErr);
+        } finally {
+          isStreamingFrame = false;
+        }
+      }, "image/jpeg", 0.7);
+    } catch (e) {
+      isStreamingFrame = false;
+    }
+  }, 80);
+}
+
+function stopFrameStreaming() {
+  if (browserWebcamStreamingInterval) {
+    clearInterval(browserWebcamStreamingInterval);
+    browserWebcamStreamingInterval = null;
+  }
+  isStreamingFrame = false;
+}
+
+async function checkEnvironmentAndInitWebcam() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const forceCloud = urlParams.get("mode") === "cloud" || window.FORCE_CLOUD_CAMERA === true;
+
+  try {
+    const res = await fetch(getApiUrl("/api/status"));
+    if (res.ok) {
+      const data = await res.json();
+      if (data.cloud_mode || forceCloud) {
+        enableCloudWebcamMode();
+      }
+    }
+  } catch (err) {
+    if (forceCloud) {
+      enableCloudWebcamMode();
+    }
+  }
+}
+
+// ------------------------------------------------------------------ //
 //  State Application Engine                                            //
 // ------------------------------------------------------------------ //
 
@@ -300,19 +456,29 @@ function applyState(state) {
   if ($fpsBadge) $fpsBadge.textContent = `FPS: ${fpsVal}`;
   if ($hudFpsPill) $hudFpsPill.textContent = `FPS: ${fpsVal}`;
 
-  // 2. Camera Status
+  // 2. Camera Status & Cloud Mode Handling
+  const isCloud = state.cloud_mode === true || state.camera_mode === "cloud_browser" || isCloudMode;
   const camOk = state.camera_ok !== false;
+
+  if (isCloud && !isCloudMode) {
+    enableCloudWebcamMode();
+  }
+
   if ($statusCamera && $statusCameraVal) {
     $statusCamera.className = `telemetry-dot ${camOk ? "ok" : "err"}`;
-    $statusCameraVal.textContent = camOk ? "READY" : "OFFLINE";
+    $statusCameraVal.textContent = camOk ? (isCloud ? "CLOUD (BROWSER)" : "READY (LOCAL)") : "OFFLINE";
   }
   if ($liveIndicator) {
     $liveIndicator.className = `stream-indicator ${camOk ? "live" : "offline"}`;
-    $liveIndicator.textContent = camOk ? "LIVE" : "OFFLINE";
+    $liveIndicator.textContent = camOk ? (isCloud ? "CLOUD LIVE" : "LIVE") : "OFFLINE";
+  }
+  if ($hudModePill) {
+    $hudModePill.style.display = isCloud ? "inline-flex" : "none";
+    $hudModePill.textContent = "CLOUD WEBCAM";
   }
 
   // Viewport Overlay on Camera Error
-  if (!camOk) {
+  if (!camOk && !isCloud) {
     if ($cameraOverlay) {
       $cameraOverlay.dataset.source = "camera";
       $cameraOverlay.style.display = "flex";
@@ -322,7 +488,7 @@ function applyState(state) {
           : "Webcam feed unavailable. Verify camera connection.";
       }
     }
-  } else if ($cameraOverlay && $cameraOverlay.dataset.source === "camera") {
+  } else if ($cameraOverlay && $cameraOverlay.dataset.source === "camera" && camOk) {
     $cameraOverlay.style.display = "none";
   }
 
@@ -919,6 +1085,11 @@ function toggleHudOverlay() {
 // ------------------------------------------------------------------ //
 
 function reconnectCameraStream() {
+  if (isCloudMode) {
+    showToast("Re-initializing browser webcam...", "info");
+    enableCloudWebcamMode();
+    return;
+  }
   if (!$cameraImg) return;
   showToast("Reconnecting video feed...", "info");
   const timestamp = Date.now();
@@ -979,6 +1150,27 @@ function setupEventListeners() {
   if ($btnReconnectStream) $btnReconnectStream.addEventListener("click", reconnectCameraStream);
   if ($btnToggleCamera) {
     $btnToggleCamera.addEventListener("click", async () => {
+      if (isCloudMode && browserWebcamStream) {
+        const tracks = browserWebcamStream.getVideoTracks();
+        const anyDisabled = tracks.some(t => !t.enabled);
+        const willEnable = anyDisabled;
+        tracks.forEach(t => t.enabled = willEnable);
+        const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
+        if (willEnable) {
+          if (videoEl && videoEl.paused) videoEl.play();
+          startFrameStreaming(videoEl);
+          showToast("Browser webcam feed resumed", "info");
+          $btnToggleCamera.textContent = "📷 Pause Camera";
+          $btnToggleCamera.classList.remove("paused");
+        } else {
+          stopFrameStreaming();
+          if (videoEl) videoEl.pause();
+          showToast("Browser webcam feed paused", "info");
+          $btnToggleCamera.textContent = "📷 Resume Camera";
+          $btnToggleCamera.classList.add("paused");
+        }
+        return;
+      }
       try {
         const res = await fetch(getApiUrl("/api/camera/toggle"), { method: "POST" });
         const data = await res.json();
@@ -1141,4 +1333,5 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   loadVoiceCatalog();
   connectSSE();
+  checkEnvironmentAndInitWebcam();
 });

@@ -34,6 +34,25 @@ from translator import LANGUAGE_DISPLAY_NAMES, translate_sentence
 from tts_engine import TTSEngine
 
 
+def is_cloud_environment() -> bool:
+    """
+    Detect if running in Render, Cloud, Docker container or headless environment
+    where physical server-side cameras do not exist.
+    """
+    if os.environ.get("RENDER"):
+        return True
+    if os.environ.get("IS_CLOUD") in ("1", "true", "True"):
+        return True
+    if os.environ.get("HEADLESS") in ("1", "true", "True") or os.environ.get("ISL_HEADLESS") in ("1", "true", "True"):
+        return True
+    # If on Linux and no video devices exist in /dev
+    if sys.platform.startswith("linux"):
+        video_devs = [f"/dev/video{i}" for i in range(4)]
+        if not any(os.path.exists(v) for v in video_devs):
+            return True
+    return False
+
+
 class InferenceEngine:
     """
     Thread-safe engine for Indian Sign Language Alphabet and Fingerspelling Translation.
@@ -49,7 +68,9 @@ class InferenceEngine:
         self._camera_index = camera_index
         self._camera_width = camera_width
         self._camera_height = camera_height
+        self._is_cloud = is_cloud_environment()
         self._lock = threading.Lock()
+        self._infer_lock = threading.Lock()
         self._frame_condition = threading.Condition(self._lock)
         self._frame_id: int = 0
         self._thread: Optional[threading.Thread] = None
@@ -141,7 +162,9 @@ class InferenceEngine:
             "model_display_name": self._model_registry[self._active_model_id]["name"],
             "model_experimental": False,
             "model_class_count": 26,
-            "camera_ok": False,
+            "camera_ok": True if self._is_cloud else False,
+            "camera_mode": "cloud_browser" if self._is_cloud else "local_hardware",
+            "cloud_mode": self._is_cloud,
             "camera_enabled": True,
             "model_ok": False,
             "speech_enabled": True,
@@ -307,6 +330,10 @@ class InferenceEngine:
         """Alias for get_latest_state for backward-compatibility with tests."""
         return self.get_latest_state()
 
+    @property
+    def is_cloud(self) -> bool:
+        return self._is_cloud
+
     def is_ready(self) -> dict:
         with self._lock:
             return {
@@ -314,6 +341,8 @@ class InferenceEngine:
                 "running": self._running,
                 "camera_ok": self._state.get("camera_ok", False),
                 "camera_enabled": self._camera_enabled,
+                "camera_mode": self._state.get("camera_mode", "cloud_browser" if self._is_cloud else "local_hardware"),
+                "cloud_mode": self._is_cloud,
                 "model_ok": self._state.get("model_ok", False),
                 "app_mode": self._app_mode,
                 "active_model": self._active_model_id,
@@ -552,8 +581,140 @@ class InferenceEngine:
         return jpeg.tobytes()
 
     # ------------------------------------------------------------------ #
-    #  Inference Thread Loop                                             #
+    #  Inference Thread Loop & Frame Processor                           #
     # ------------------------------------------------------------------ #
+
+    def process_frame(
+        self,
+        frame: np.ndarray,
+        is_mirrored: bool = False,
+        current_time: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Process a single image frame through MediaPipe Holistic tracking,
+        multi-modal decision fusion (AlphabetEngine + RGB CNN), WordBuffer debouncing,
+        and multilingual Indic translation.
+
+        Thread-safe: Can be called from local hardware loop or cloud browser frame endpoint.
+        """
+        if frame is None or frame.size == 0:
+            return {"ok": False, "error": "Empty frame"}
+
+        now = current_time if current_time is not None else time.time()
+
+        # Mirror image for natural user interaction if not already mirrored
+        image = frame if is_mirrored else cv2.flip(frame, 1)
+
+        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        rgb.flags.writeable = False
+
+        with self._infer_lock:
+            if self._hands_detector is None:
+                mp_hands = mp.solutions.hands
+                self._mp_drawing = mp.solutions.drawing_utils
+                self._mp_drawing_styles = mp.solutions.drawing_styles
+                self._mp_hands = mp_hands
+                self._hands_detector = mp_hands.Hands(
+                    static_image_mode=False,
+                    max_num_hands=2,
+                    min_detection_confidence=0.55,
+                    min_tracking_confidence=0.50,
+                )
+
+            hand_res = self._hands_detector.process(rgb)
+            rgb.flags.writeable = True
+
+            multi_lms = hand_res.multi_hand_landmarks
+            multi_handedness = hand_res.multi_handedness
+
+            # Draw landmark skeletal overlays
+            if multi_lms and hasattr(self, "_mp_drawing"):
+                for hand_landmarks in multi_lms:
+                    self._mp_drawing.draw_landmarks(
+                        image,
+                        hand_landmarks,
+                        self._mp_hands.HAND_CONNECTIONS,
+                        self._mp_drawing_styles.get_default_hand_landmarks_style(),
+                        self._mp_drawing_styles.get_default_hand_connections_style(),
+                    )
+
+            # Encode annotated JPEG outside lock for zero latency
+            _, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            jpeg_bytes = jpeg.tobytes()
+
+            # Execute Multi-Modal Recognition and Fusion under _lock
+            with self._lock:
+                if self._alphabet_engine is not None:
+                    alpha_status = self._alphabet_engine.process_dual_landmarks(
+                        multi_lms, multi_handedness, rgb_frame=rgb, current_time=now
+                    )
+                else:
+                    alpha_status = {}
+
+                recent_emitted = getattr(self, "_recent_emitted", None)
+                emitted_timer = getattr(self, "_emitted_display_timer", 0.0)
+
+                if alpha_status.get("emitted_letter"):
+                    recent_emitted = alpha_status["emitted_letter"]
+                    emitted_timer = now + 1.2
+                elif now > emitted_timer:
+                    recent_emitted = None
+
+                self._recent_emitted = recent_emitted
+                self._emitted_display_timer = emitted_timer
+
+                cur_sent = alpha_status.get("sentence", "")
+                cur_full = alpha_status.get("full_text", "")
+                cur_word = alpha_status.get("current_word", "")
+                cur_lang = self._state.get("language", "English")
+
+                self._state.update({
+                    "app_mode": "alphabet",
+                    "camera_ok": True,
+                    "pred_label": alpha_status.get("raw_prediction") or "--",
+                    "translated_label": alpha_status.get("raw_prediction") or "--",
+                    "confidence": round(float(alpha_status.get("raw_confidence", 0.0)), 4),
+                    "alphabet_raw_letter": alpha_status.get("raw_prediction") or "--",
+                    "alphabet_confidence": round(float(alpha_status.get("raw_confidence", 0.0)), 4),
+                    "alphabet_stable_letter": alpha_status.get("stable_letter") or "--",
+                    "alphabet_emitted_letter": recent_emitted,
+                    "alphabet_emission_id": alpha_status.get("emission_id", 0),
+                    "emission_id": alpha_status.get("emission_id", 0),
+                    "alphabet_current_word": cur_word,
+                    "alphabet_sentence": cur_sent,
+                    "alphabet_full_text": cur_full,
+                    "alphabet_target_language": cur_lang,
+                    "alphabet_state": alpha_status.get("state", "IDLE"),
+                    "alphabet_hand_detected": alpha_status.get("hand_detected", False),
+                    "alphabet_hand_count": alpha_status.get("hand_count", 0),
+                    "alphabet_hand_status": alpha_status.get("hand_status", "NO HAND"),
+                    "hand_detected": alpha_status.get("hand_detected", False),
+                    "speech_status": "Speaking..." if (self._tts_engine and self._tts_engine.is_speaking) else "Ready",
+                    # Pathway Telemetry
+                    "landmark_prediction": alpha_status.get("landmark_prediction"),
+                    "landmark_confidence": round(float(alpha_status.get("landmark_confidence", 0.0)), 4),
+                    "landmark_model": alpha_status.get("active_pipeline", "Landmark"),
+                    "cnn_prediction": alpha_status.get("cnn_prediction"),
+                    "cnn_confidence": round(float(alpha_status.get("cnn_confidence", 0.0)), 4),
+                    "cnn_status": alpha_status.get("cnn_status", "OFFLINE"),
+                    "fused_prediction": alpha_status.get("fused_prediction"),
+                    "fused_confidence": round(float(alpha_status.get("fused_confidence", 0.0)), 4),
+                    "fusion_mode": alpha_status.get("fusion_mode", "LANDMARK_ONLY"),
+                    "fusion_reason": alpha_status.get("fusion_reason", ""),
+                })
+
+            # Compute translation
+            src_text = cur_full.strip()
+            alpha_trans = translate_sentence(src_text, cur_lang) if src_text else ""
+
+            with self._frame_condition:
+                self._frame_bytes = jpeg_bytes
+                self._frame_id += 1
+                if self._state.get("alphabet_full_text", "").strip() == src_text:
+                    self._state["alphabet_translation"] = alpha_trans
+                self._frame_condition.notify_all()
+
+        return dict(self._state)
 
     def _run(self) -> None:
         """Background thread handling webcam acquisition, MediaPipe tracking, and fusion."""
@@ -568,22 +729,47 @@ class InferenceEngine:
                 self._state["speech_status"] = f"Model load error: {e}"
 
         mp_hands = mp.solutions.hands
-        mp_drawing = mp.solutions.drawing_utils
-        mp_drawing_styles = mp.solutions.drawing_styles
+        self._mp_drawing = mp.solutions.drawing_utils
+        self._mp_drawing_styles = mp.solutions.drawing_styles
+        self._mp_hands = mp_hands
 
-        hands_detector = mp_hands.Hands(
+        self._hands_detector = mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=2,
             min_detection_confidence=0.55,
             min_tracking_confidence=0.50,
         )
-        self._hands_detector = hands_detector
 
+        initial_msg = "Awaiting Browser Webcam Feed" if self._is_cloud else "Initializing Camera..."
+        initial_standby = self._create_standby_frame(initial_msg)
+        with self._frame_condition:
+            self._frame_bytes = initial_standby
+            self._frame_id += 1
+            self._frame_condition.notify_all()
+
+        # Cloud Mode: Server-side camera loop is completely disabled.
+        # Frames are ingested via /api/camera/frame from client browser getUserMedia.
+        if self._is_cloud:
+            print("[InferenceEngine] Cloud environment detected. Server-side physical camera loop disabled.")
+            print("[InferenceEngine] Ready for browser webcam frames via /api/camera/frame.")
+            with self._lock:
+                self._state["camera_ok"] = True
+                self._state["camera_mode"] = "cloud_browser"
+                self._state["alphabet_hand_status"] = "AWAITING BROWSER WEBCAM"
+            while self._running:
+                time.sleep(0.5)
+            if self._hands_detector is not None:
+                try:
+                    self._hands_detector.close()
+                except Exception:
+                    pass
+            self._hands_detector = None
+            return
+
+        # Local Mode: OpenCV hardware webcam capture
         fps_buffer = deque(maxlen=30)
         last_frame_time = time.time()
-        recent_emitted = None
-        emitted_display_timer = 0.0
-
+        consecutive_cam_failures = 0
         cap = None
 
         while self._running:
@@ -613,6 +799,7 @@ class InferenceEngine:
                 cap = cv2.VideoCapture(self._camera_index)
                 self._cap = cap
                 if not cap.isOpened():
+                    consecutive_cam_failures += 1
                     with self._lock:
                         self._state["camera_ok"] = False
                         self._state["speech_status"] = "Camera hardware unavailable"
@@ -623,9 +810,11 @@ class InferenceEngine:
                         self._frame_bytes = standby_bytes
                         self._frame_id += 1
                         self._frame_condition.notify_all()
-                    time.sleep(0.5)
+                    backoff = min(2.0, 0.5 * consecutive_cam_failures)
+                    time.sleep(backoff)
                     continue
 
+                consecutive_cam_failures = 0
                 cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._camera_width)
                 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._camera_height)
                 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -645,96 +834,10 @@ class InferenceEngine:
                 fps_buffer.append(1.0 / dt)
             smoothed_fps = float(np.mean(fps_buffer)) if fps_buffer else 0.0
 
-            # Mirror image for natural user interaction
-            image = cv2.flip(frame, 1)
-            rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            rgb.flags.writeable = False
-            hand_res = hands_detector.process(rgb)
-            rgb.flags.writeable = True
-
-            multi_lms = hand_res.multi_hand_landmarks
-            multi_handedness = hand_res.multi_handedness
-
-            # Draw landmark skeletal overlays
-            if multi_lms:
-                for hand_landmarks in multi_lms:
-                    mp_drawing.draw_landmarks(
-                        image,
-                        hand_landmarks,
-                        mp_hands.HAND_CONNECTIONS,
-                        mp_drawing_styles.get_default_hand_landmarks_style(),
-                        mp_drawing_styles.get_default_hand_connections_style(),
-                    )
-
-            # Encode annotated JPEG outside lock for zero latency
-            _, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            jpeg_bytes = jpeg.tobytes()
-
-            # Execute Multi-Modal Recognition and Fusion under _lock
+            # Process frame using the shared modular pipeline
+            self.process_frame(frame, is_mirrored=False, current_time=now)
             with self._lock:
-                if self._alphabet_engine is not None:
-                    alpha_status = self._alphabet_engine.process_dual_landmarks(
-                        multi_lms, multi_handedness, rgb_frame=rgb, current_time=now
-                    )
-                else:
-                    alpha_status = {}
-
-                if alpha_status.get("emitted_letter"):
-                    recent_emitted = alpha_status["emitted_letter"]
-                    emitted_display_timer = now + 1.2
-                elif now > emitted_display_timer:
-                    recent_emitted = None
-
-                cur_sent = alpha_status.get("sentence", "")
-                cur_full = alpha_status.get("full_text", "")
-                cur_word = alpha_status.get("current_word", "")
-                cur_lang = self._state.get("language", "English")
-
-                self._state.update({
-                    "app_mode": "alphabet",
-                    "pred_label": alpha_status.get("raw_prediction") or "--",
-                    "translated_label": alpha_status.get("raw_prediction") or "--",
-                    "confidence": round(float(alpha_status.get("raw_confidence", 0.0)), 4),
-                    "alphabet_raw_letter": alpha_status.get("raw_prediction") or "--",
-                    "alphabet_confidence": round(float(alpha_status.get("raw_confidence", 0.0)), 4),
-                    "alphabet_stable_letter": alpha_status.get("stable_letter") or "--",
-                    "alphabet_emitted_letter": recent_emitted,
-                    "alphabet_emission_id": alpha_status.get("emission_id", 0),
-                    "emission_id": alpha_status.get("emission_id", 0),
-                    "alphabet_current_word": cur_word,
-                    "alphabet_sentence": cur_sent,
-                    "alphabet_full_text": cur_full,
-                    "alphabet_target_language": cur_lang,
-                    "alphabet_state": alpha_status.get("state", "IDLE"),
-                    "alphabet_hand_detected": alpha_status.get("hand_detected", False),
-                    "alphabet_hand_count": alpha_status.get("hand_count", 0),
-                    "alphabet_hand_status": alpha_status.get("hand_status", "NO HAND"),
-                    "hand_detected": alpha_status.get("hand_detected", False),
-                    "fps": round(smoothed_fps, 1),
-                    "speech_status": "Speaking..." if (self._tts_engine and self._tts_engine.is_speaking) else "Ready",
-                    # Pathway Telemetry
-                    "landmark_prediction": alpha_status.get("landmark_prediction"),
-                    "landmark_confidence": round(float(alpha_status.get("landmark_confidence", 0.0)), 4),
-                    "landmark_model": alpha_status.get("active_pipeline", "Landmark"),
-                    "cnn_prediction": alpha_status.get("cnn_prediction"),
-                    "cnn_confidence": round(float(alpha_status.get("cnn_confidence", 0.0)), 4),
-                    "cnn_status": alpha_status.get("cnn_status", "OFFLINE"),
-                    "fused_prediction": alpha_status.get("fused_prediction"),
-                    "fused_confidence": round(float(alpha_status.get("fused_confidence", 0.0)), 4),
-                    "fusion_mode": alpha_status.get("fusion_mode", "LANDMARK_ONLY"),
-                    "fusion_reason": alpha_status.get("fusion_reason", ""),
-                })
-
-            # Compute translation
-            src_text = cur_full.strip()
-            alpha_trans = translate_sentence(src_text, cur_lang) if src_text else ""
-
-            with self._frame_condition:
-                self._frame_bytes = jpeg_bytes
-                self._frame_id += 1
-                if self._state.get("alphabet_full_text", "").strip() == src_text:
-                    self._state["alphabet_translation"] = alpha_trans
-                self._frame_condition.notify_all()
+                self._state["fps"] = round(smoothed_fps, 1)
 
         # Clean termination
         if cap is not None:
@@ -743,9 +846,9 @@ class InferenceEngine:
             except Exception:
                 pass
         self._cap = None
-        if hands_detector is not None:
+        if self._hands_detector is not None:
             try:
-                hands_detector.close()
+                self._hands_detector.close()
             except Exception:
                 pass
         self._hands_detector = None

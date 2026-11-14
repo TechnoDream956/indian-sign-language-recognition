@@ -12,13 +12,16 @@ Routes:
   GET  /api/status   → Health check JSON
 """
 
+import base64
 import json
 import os
 import sys
+import threading
 import time
 import webbrowser
-import threading
 
+import cv2
+import numpy as np
 from flask import Flask, Response, jsonify, render_template, request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -449,10 +452,89 @@ def heartbeat():
     return jsonify({"ok": True, "alive": True})
 
 
+@app.route("/api/healthz", methods=["GET"])
+def healthz():
+    """Lightweight health check endpoint for cloud orchestrators (Render, Docker, Kubernetes)."""
+    cancel_disconnect_timer()
+    return jsonify({
+        "status": "healthy",
+        "camera_mode": "cloud_browser" if engine.is_cloud else "local_hardware",
+        "cloud_mode": engine.is_cloud,
+        "ready": engine._running,
+        "model_ok": engine._state.get("model_ok", False),
+    }), 200
+
+
 @app.route("/api/status")
 def status():
     cancel_disconnect_timer()
-    return jsonify(engine.is_ready())
+    return jsonify(engine.is_ready()), 200
+
+
+@app.route("/api/camera/frame", methods=["POST"])
+def camera_frame():
+    """
+    Receive webcam frame from browser client (for cloud deployments or browser webcam).
+    Accepts:
+      1. JSON: {"image": "data:image/jpeg;base64,...", "mirrored": false} or {"frame": "base64..."}
+      2. Form-data: file/blob in 'frame' or 'image' field
+      3. Binary raw image/jpeg body
+    """
+    try:
+        frame = None
+        content_type = request.content_type or ""
+        is_mirrored = False
+
+        if "application/json" in content_type:
+            data = request.get_json(silent=True) or {}
+            b64_str = data.get("image") or data.get("frame") or data.get("data") or data.get("blob")
+            is_mirrored = bool(data.get("mirrored", False))
+            if b64_str:
+                if "," in b64_str:
+                    b64_str = b64_str.split(",", 1)[1]
+                img_bytes = base64.b64decode(b64_str)
+                nparr = np.frombuffer(img_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        elif "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
+            uploaded = request.files.get("frame") or request.files.get("image") or request.files.get("file")
+            if uploaded:
+                img_bytes = uploaded.read()
+                nparr = np.frombuffer(img_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if request.form.get("mirrored") in ("1", "true", "True"):
+                is_mirrored = True
+        else:
+            raw_bytes = request.get_data()
+            if raw_bytes:
+                nparr = np.frombuffer(raw_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if frame is None or frame.size == 0:
+            return jsonify({
+                "ok": False,
+                "error": "Invalid or empty image frame. Provide binary JPEG, multipart file, or base64 JSON."
+            }), 400
+
+        res = engine.process_frame(frame, is_mirrored=is_mirrored)
+        cancel_disconnect_timer()
+
+        return jsonify({
+            "ok": True,
+            "prediction": res.get("pred_label"),
+            "confidence": res.get("confidence"),
+            "fused_prediction": res.get("fused_prediction"),
+            "fused_confidence": res.get("fused_confidence"),
+            "fusion_mode": res.get("fusion_mode"),
+            "word": res.get("alphabet_current_word", ""),
+            "sentence": res.get("alphabet_sentence", ""),
+            "full_text": res.get("alphabet_full_text", ""),
+            "translation": res.get("alphabet_translation", ""),
+            "hand_detected": res.get("hand_detected", False),
+            "hand_count": res.get("alphabet_hand_count", 0),
+            "state": res,
+        }), 200
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ------------------------------------------------------------------ #
@@ -460,35 +542,45 @@ def status():
 # ------------------------------------------------------------------ #
 
 def open_browser(port):
+    if engine.is_cloud or os.environ.get("ISL_NO_BROWSER") or os.environ.get("RENDER"):
+        return
     time.sleep(1.5)
-    if not os.environ.get("ISL_NO_BROWSER"):
-        webbrowser.open(f"http://127.0.0.1:{port}")
+    webbrowser.open(f"http://127.0.0.1:{port}")
 
 
 if __name__ == "__main__":
     import socket
-    port = int(os.environ.get("PORT", 5000))
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.bind(("127.0.0.1", port))
-    except OSError:
+    host = os.environ.get("HOST", "0.0.0.0")
+    port_env = os.environ.get("PORT")
+
+    if port_env:
+        port = int(port_env)
+    else:
         port = 5001
-    finally:
-        sock.close()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind(("127.0.0.1", 5000))
+            port = 5000
+        except OSError:
+            port = 5001
+        finally:
+            sock.close()
 
     print("\n🤟  ISL Translator — Professional UI")
     print("     Starting inference engine...")
     engine.start()
 
-    # Open browser after a short delay (let Flask bind the port first)
-    browser_thread = threading.Thread(target=open_browser, args=(port,), daemon=True)
-    browser_thread.start()
+    # Open browser after a short delay (local only)
+    if not engine.is_cloud and not os.environ.get("ISL_NO_BROWSER"):
+        browser_thread = threading.Thread(target=open_browser, args=(port,), daemon=True)
+        browser_thread.start()
 
-    print(f"     Server: http://127.0.0.1:{port}")
+    print(f"     Server: http://{host}:{port}")
+    print(f"     Mode:   {'Cloud (Browser Webcam Ingestion)' if engine.is_cloud else 'Local (Hardware Webcam)'}")
     print("     Press Ctrl+C to quit.\n")
 
     try:
-        app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
+        app.run(host=host, port=port, debug=False, threaded=True)
     except KeyboardInterrupt:
         pass
     finally:
