@@ -26,9 +26,29 @@ git clone https://github.com/<your-username>/indian-sign-language-recognition.gi
 cd indian-sign-language-recognition
 ```
 
-### Step 2: Set Up Python Virtual Environment
+### Step 2: Set Up Python 3.10 Virtual Environment
 
-It is strongly recommended to use a dedicated Python 3.10 virtual environment to avoid dependency conflicts.
+> [!IMPORTANT]
+> **Why Python 3.10 is Recommended:**
+> The computer vision and neural perception pipeline requires **MediaPipe (`0.10.21`)** and **TensorFlow (`2.16.2`)**. On macOS Apple Silicon (M1/M2/M3/M4) and Linux, pre-compiled ARM64 wheels are officially verified and distributed for Python 3.9–3.11. Modern macOS installations frequently default to newer Python versions (such as Python 3.12, 3.13, or 3.14), which lack pre-compiled binary wheels for TensorFlow/MediaPipe and will fail during dependency installation.
+
+#### macOS (Apple Silicon & Intel via Homebrew):
+
+```bash
+# 1. Install Python 3.10 if not already installed
+brew install python@3.10
+
+# 2. Verify Python 3.10 is available
+python3.10 --version
+
+# 3. Create virtual environment named 'venv'
+python3.10 -m venv venv
+
+# 4. Activate the virtual environment
+source venv/bin/activate
+```
+
+#### Linux / General Setup (where `python3` is Python 3.10):
 
 ```bash
 # Verify Python version (must be 3.9 - 3.11)
@@ -38,7 +58,6 @@ python3 --version
 python3 -m venv venv
 
 # Activate virtual environment
-# On macOS / Linux:
 source venv/bin/activate
 ```
 

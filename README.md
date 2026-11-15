@@ -19,7 +19,7 @@
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
-- [Live Deployments](#-live-deployments)
+- [Desktop Application Execution](#-desktop-application-execution)
 - [System Architecture](#-system-architecture)
   - [Processing Pipeline](#processing-pipeline)
   - [Cloud Webcam Architecture](#cloud-webcam-architecture)
@@ -34,8 +34,8 @@
 - [Repository Structure](#-repository-structure)
 - [Installation & Local Setup](#-installation--local-setup)
 - [Production Deployment](#-production-deployment)
-  - [Frontend (Vercel)](#frontend-vercel)
-  - [Backend (Render)](#backend-render)
+  - [Local Desktop Architecture (Primary)](#local-desktop-architecture-primary)
+  - [Docker Containerization (Optional)](#docker-containerization-optional)
 - [API Reference](#-api-reference)
 - [Testing & Quality Assurance](#-testing--quality-assurance)
 - [Current System Limitations](#-current-system-limitations)
@@ -83,7 +83,7 @@ The project is packaged as a **self-contained local desktop application** design
 
 ```mermaid
 flowchart TD
-    subgraph Client ["Client Browser (Vercel Edge SPA)"]
+    subgraph Client ["Client Browser Dashboard (Chrome / Safari / Edge)"]
         Cam["Webcam Input (640x480 @ 12-25 FPS)"]
         Canvas["HTML5 Canvas Overlay (21 Keypoints + Skeleton)"]
         Loop["Paced Frame Ingestion (RTT-Adaptive Chaining)"]
@@ -93,7 +93,7 @@ flowchart TD
         Speech["Client-Side Web Speech API (Indic TTS)"]
     end
 
-    subgraph Backend ["Python Inference Backend (Render Container / Local)"]
+    subgraph Backend ["Python Inference Backend (Local Flask Server / Port 5001)"]
         Ingest["POST /api/camera/frame"]
         MP["MediaPipe Hands Detector (21 3D Normalized Keypoints)"]
 
@@ -186,7 +186,7 @@ This platform uses a **Cloud Browser Webcam Ingestion Pattern**:
 - **Multi-Modal Decision Debugger:** Live panel showing independent landmark top-3 predictions, CNN predictions, and fused decisions.
 - **Safe Session Toggle:** Header button switches cleanly between "Start Camera" and "Stop Camera", disabling webcam tracks without terminating the backend server.
 - **System Settings Modal:**
-  - Configurable Backend URL (switches between Render cloud and local Flask).
+  - Configurable Backend URL (defaults to local host origin `http://127.0.0.1:5001` with custom server override support).
   - Live Latency Ping Test calling `/api/healthz`.
   - Video stream and skeleton canvas selfie mirroring toggle.
   - Detection confidence threshold slider (30% to 95%).
@@ -266,8 +266,8 @@ The application provides a responsive computer vision workspace organized into 7
 | **Frontend Framework** | **HTML5 / CSS3 / ES6+** | Native | Zero-dependency, responsive dark workspace with CSS Grid and Flexbox. |
 | **Canvas Rendering** | **HTML5 Canvas API** | Native | Sub-frame landmark skeletal bone rendering overlaid on live video. |
 | **Voice Synthesis** | **Web Speech API** | Native | Client-side speech synthesis targeting installed Indic OS voices. |
-| **Frontend Hosting** | **Vercel** | Edge | Static SPA hosting with automatic API rewrites to the cloud backend. |
-| **Backend Hosting** | **Render** | Docker | Containerized hosting for the Python ML inference server and endpoints. |
+| **Desktop Packaging** | **macOS Bundle (`.app`)** | Native | Self-contained double-clickable desktop application with single-instance lifecycle management. |
+| **Containerization** | **Docker** | Multi-Arch | Optional containerized packaging for headless server and isolated testing environments. |
 
 ---
 
@@ -283,7 +283,7 @@ Indian-Sign-Language-Recognition/
 │   ├── ARCHITECTURE.md              # Detailed pipeline data-flow specifications
 │   ├── CODEBASE_GUIDE.md            # Module-by-module implementation walkthrough
 │   ├── DATASETS.md                  # Dataset provenance, annotations, and schemas
-│   ├── DEPLOYMENT.md                # Cloud deployment guides for Vercel and Render
+│   ├── DEPLOYMENT.md                # Deployment guides for desktop, Docker, and headless server
 │   ├── INSTALLATION.md              # Extended environment configuration guide
 │   ├── PRESENTATION_GUIDE.md        # Academic demonstration notes
 │   ├── PROJECT_REPORT.md            # Comprehensive project overview
@@ -315,7 +315,7 @@ Indian-Sign-Language-Recognition/
 │   ├── tts_engine.py                # Native macOS say / afplay speech synthesis fallback
 │   ├── static/                      # Local Flask server static mirror (app.js, style.css)
 │   └── templates/                   # Local Flask server Jinja2 templates (index.html)
-├── tests/                           # Comprehensive automated test suite (118 tests)
+├── tests/                           # Comprehensive automated test suite (235 tests across 18 suites)
 │   ├── test_alphabet_26class_matrix.py
 │   ├── test_alphabet_accuracy.py
 │   ├── test_alphabet_engine.py
