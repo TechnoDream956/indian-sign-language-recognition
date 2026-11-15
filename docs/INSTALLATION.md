@@ -52,29 +52,28 @@ pip install -r requirements.txt
 ```
 
 #### Core Dependencies Overview:
-- **`mediapipe==0.10.9`**: Cross-platform ML solutions for pose, hand, and face landmark tracking.
-- **`tensorflow==2.15.0`** (or `tensorflow-macos` on Apple Silicon): Neural network execution engine.
-- **`opencv-python`**: Video capture, frame preprocessing, and HUD overlay generation.
-- **`flask`**: Asynchronous web server hosting the interactive UI, MJPEG video feed, and SSE stream.
-- **`googletrans==4.0.0-rc1`**: Neural machine translation engine for 10 regional Indian languages.
-- **`pyttsx3` / `gTTS`**: Offline and cloud speech synthesis backends.
+- **`mediapipe==0.10.21`**: Cross-platform ML solutions for hand landmark tracking (21 3D normalized keypoints).
+- **`tensorflow==2.16.2` / `tf-keras==2.16.0`**: Neural network execution engine for Landmark MLP and visual CNN.
+- **`opencv-python==4.11.0.86`**: Video capture, frame preprocessing, and HUD overlay generation.
+- **`flask==3.1.3`**: High-performance local web server hosting the interactive UI, MJPEG video feed, and SSE stream.
+- **`scikit-learn==1.7.2`**: Continuous learning, personal adapters, and feature evaluation.
+- **`pillow==12.3.0`**: Image cropping and bounding box extraction for visual CNN.
 
 ### Step 4: Verify Model Artifacts
 
-All necessary pre-trained model weights and label encoders are included directly within the `models/` directory (~11 MB total). Ensure all required files are present:
+All necessary pre-trained model weights and label encoders are included directly within the `models/` directory (~7.1 MB total). Ensure all required files are present:
 
 ```bash
 ls -lh models/
 ```
 
 Expected files:
-- `alphabet_model_26class.h5` (~292 KB) — 26-class Dense fingerspelling model
+- `alphabet_model_26class.h5` (~295 KB) — Production 26-class Dense Landmark fingerspelling model
 - `alphabet_label_map.json` — Mapping for characters A–Z
 - `alphabet_model_26class_summary.txt` — Architecture specification
-- `mopgru_model.h5` (~5.2 MB) — 13-class foundational MoP-GRU word model
-- `labelencoder.pkl` — 13-class label encoder
-- `mopgru_model_29class.h5` (~5.2 MB) — 29-class extended MoP-GRU word model
-- `labelencoder_29class.pkl` — 29-class label encoder
+- `cnn_sign_model.h5` (~3.2 MB) — Production 128x128 RGB visual CNN model
+- `cnn_label_map.json` — 26-class character mapping for CNN
+- `experimental/` — Dual-hand 144D feature models and ablation checkpoints
 
 ### Step 5: Run Automated Tests
 
@@ -86,7 +85,7 @@ python -m unittest discover -s tests
 
 **Expected output:**
 ```text
-Ran 87 tests in ~0.7s
+Ran 235 tests in ~12.5s
 OK
 ```
 
@@ -94,29 +93,29 @@ OK
 
 ## 3. Launching the Application
 
-### Option A: Interactive Web Application (Recommended)
+### Option A: Double-Click Desktop Launch (Recommended for macOS)
 
-Run the Flask web server:
+1. Open Finder to the repository directory.
+2. Double-click **`ISL Translator.app`** (or **`Launch ISL Translator.command`**).
+3. The launcher automatically:
+   - Verifies models, templates, and static assets.
+   - Binds port 5001 with single-instance safety.
+   - Polls health and launches your default browser at **`http://127.0.0.1:5001`**.
 
-```bash
-python src/app.py
-```
+### Option B: Terminal Command Launch
 
-Output:
-```text
- * Running on http://127.0.0.1:5000 (Press CTRL+C to quit)
-```
-
-Open your browser (Google Chrome, Apple Safari, or Mozilla Firefox) and navigate to:
-**`http://127.0.0.1:5000`**
-
-### Option B: Solo Dual-Hand Alphabet Collection Utility
-
-To collect new sign samples or practice fingerspelling with automatic stability gating and countdowns:
+Run the Python launcher directly:
 
 ```bash
-python src/collect_dual_hand_alphabet.py --solo --samples-per-label 5 --output-dir data/phase5p_dual_hand
+python packaging/launcher.py
 ```
+
+Or start Flask directly:
+```bash
+PORT=5001 python src/app.py
+```
+
+Open your browser to: **`http://127.0.0.1:5001`**
 
 ---
 

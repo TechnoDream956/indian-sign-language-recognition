@@ -14,15 +14,18 @@ set -e
 MACOS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Dynamically resolve project root:
-# 1. Inside dist/ISL Translator.app (4 levels up)
-# 2. Inside root ISL Translator.app (3 levels up)
-# 3. Known project directory fallback
-if [ -f "$MACOS_DIR/../../../../packaging/launcher.py" ]; then
+# 1. Explicit environment variable override
+# 2. Inside dist/ISL Translator.app (4 levels up)
+# 3. Inside root ISL Translator.app (3 levels up)
+# 4. Standard user Downloads folder fallback
+if [ -n "$ISL_PROJECT_ROOT" ] && [ -f "$ISL_PROJECT_ROOT/packaging/launcher.py" ]; then
+    PROJECT_ROOT="$ISL_PROJECT_ROOT"
+elif [ -f "$MACOS_DIR/../../../../packaging/launcher.py" ]; then
     PROJECT_ROOT="$(cd "$MACOS_DIR/../../../.." && pwd)"
 elif [ -f "$MACOS_DIR/../../../packaging/launcher.py" ]; then
     PROJECT_ROOT="$(cd "$MACOS_DIR/../../.." && pwd)"
-elif [ -d "/Users/aroitsehrawat2030/Downloads/Indian-Sign-Language-Recognition" ] && [ -f "/Users/aroitsehrawat2030/Downloads/Indian-Sign-Language-Recognition/packaging/launcher.py" ]; then
-    PROJECT_ROOT="/Users/aroitsehrawat2030/Downloads/Indian-Sign-Language-Recognition"
+elif [ -d "$HOME/Downloads/Indian-Sign-Language-Recognition" ] && [ -f "$HOME/Downloads/Indian-Sign-Language-Recognition/packaging/launcher.py" ]; then
+    PROJECT_ROOT="$HOME/Downloads/Indian-Sign-Language-Recognition"
 else
     PROJECT_ROOT="$(cd "$MACOS_DIR/../../.." && pwd)"
 fi

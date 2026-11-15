@@ -668,14 +668,14 @@
         <div class="settings-group">
           <label class="settings-label" for="setting-backend-url">Backend Server URL</label>
           <div class="settings-input-row">
-            <input type="text" id="setting-backend-url" class="settings-input" placeholder="e.g. https://isl-recognition-backend.onrender.com" />
+            <input type="text" id="setting-backend-url" class="settings-input" placeholder="e.g. http://127.0.0.1:5001" />
             <button class="btn-ping" id="btn-ping-backend" type="button">Test Ping</button>
           </div>
           <div class="ping-status-row" id="ping-status-row" style="display:none;">
             <span class="ping-dot" id="ping-dot"></span>
             <span class="ping-text" id="ping-text">Testing latency...</span>
           </div>
-          <span class="settings-hint">Leave blank to default to current host origin on localhost or Render backend in cloud.</span>
+          <span class="settings-hint">Leave blank to default to local host origin (http://127.0.0.1:5001).</span>
         </div>
 
         <div class="settings-group">
