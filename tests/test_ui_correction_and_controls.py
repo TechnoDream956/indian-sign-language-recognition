@@ -318,9 +318,10 @@ class TestFeedbackCorrectionAndControls(unittest.TestCase):
 
         # 4. Valid signed token in header -> 200 OK text/event-stream
         token = self.privacy_mgr.generate_session_token("usr_test_stream_auth")
-        r_valid = client.get("/events", headers={"X-Session-Token": token})
+        r_valid = client.get("/events", headers={"X-Session-Token": token}, buffered=False)
         self.assertEqual(r_valid.status_code, 200)
         self.assertEqual(r_valid.mimetype, "text/event-stream")
+        r_valid.close()
 
     def test_frontend_sse_security_and_cancellation_contracts(self):
         """Verify that frontend JavaScript uses header-based Fetch SSE without URL tokens and handles cancellation."""
@@ -345,6 +346,171 @@ class TestFeedbackCorrectionAndControls(unittest.TestCase):
 
             # Verify Stop Camera and Quit Website disconnect SSE
             self.assertIn("disconnectSSE();", content, f"Missing disconnectSSE call in {js_path}")
+
+    def test_is_localhost_environment_helper_and_contracts(self):
+        """Verify isLocalhostEnvironment is defined, referenced correctly, and evaluates accurately."""
+        import subprocess
+
+        root = Path(__file__).resolve().parent.parent
+
+        for js_path in [
+            root / "src" / "static" / "app.js",
+            root / "public" / "app.js",
+            root / "public" / "static" / "app.js",
+        ]:
+            content = js_path.read_text(encoding="utf-8")
+            self.assertIn("function isLocalhostEnvironment()", content, f"Helper missing in {js_path}")
+            self.assertIn("const isLocal = isLocalhostEnvironment();", content, f"Call missing in {js_path}")
+            self.assertIn("isLocalhostEnvironment() ? \"\" : RENDER_BACKEND_URL", content)
+
+        # Run Node execution to verify boolean outputs under different environments
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('src/static/app.js', 'utf8');
+        const mockDoc = { getElementById: () => null, querySelectorAll: () => [], addEventListener: () => {} };
+        const mockStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+
+        function testEnv(location) {
+          const win = { location, addEventListener: () => {} };
+          const fn = new Function('window', 'document', 'localStorage', 'sessionStorage', code + '\\nreturn isLocalhostEnvironment();');
+          return fn(win, mockDoc, mockStorage, mockStorage);
+        }
+
+        const results = {
+          localhost: testEnv({ hostname: 'localhost', protocol: 'http:' }),
+          loopback: testEnv({ hostname: '127.0.0.1', protocol: 'http:' }),
+          fileProto: testEnv({ hostname: '', protocol: 'file:' }),
+          vercel: testEnv({ hostname: 'indian-sign-language-recognition-4t6xeb63n.vercel.app', protocol: 'https:' }),
+          render: testEnv({ hostname: 'isl-recognition-backend.onrender.com', protocol: 'https:' })
+        };
+        console.log(JSON.stringify(results));
+        """
+        proc = subprocess.run(["node", "-e", node_script], cwd=str(root), capture_output=True, text=True, check=True)
+        results = json.loads(proc.stdout.strip())
+        self.assertTrue(results["localhost"])
+        self.assertTrue(results["loopback"])
+        self.assertTrue(results["fileProto"])
+        self.assertFalse(results["vercel"])
+        self.assertFalse(results["render"])
+
+    def test_cloud_webcam_session_activation_and_stream_loop_contracts(self):
+        """Verify cloud webcam streaming activation, streamLoop kickoff, and error separation."""
+        import subprocess
+
+        root = Path(__file__).resolve().parent.parent
+
+        for js_path in [
+            root / "src" / "static" / "app.js",
+            root / "public" / "app.js",
+            root / "public" / "static" / "app.js",
+        ]:
+            content = js_path.read_text(encoding="utf-8")
+            self.assertIn("streamLoop(videoEl)", content)
+            self.assertIn("streamingActive = true;", content)
+            self.assertIn("isPermissionError", content)
+            self.assertIn("Camera session activation error:", content)
+            self.assertIn("browserWebcamStream.getTracks().forEach", content)
+
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('src/static/app.js', 'utf8');
+
+        let toasts = [];
+        let streamLoopCalls = 0;
+
+        const mockDoc = {
+          getElementById: (id) => ({
+            id,
+            style: {},
+            classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+            addEventListener: () => {},
+            appendChild: () => {},
+            play: async () => {},
+            pause: () => {},
+            videoWidth: 640
+          }),
+          querySelectorAll: () => [],
+          addEventListener: () => {},
+          createElement: () => ({
+            className: '',
+            style: {},
+            classList: { add: () => {} },
+            appendChild: () => {},
+            remove: () => {}
+          }),
+          body: { appendChild: () => {} }
+        };
+        const mockStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+
+        // Test 1: Successful cloud activation starts streamLoop exactly once
+        const win1 = {
+          location: { hostname: 'preview.vercel.app', protocol: 'https:' },
+          addEventListener: () => {},
+          navigator: {
+            mediaDevices: {
+              getUserMedia: async () => ({
+                getTracks: () => [{ stop: () => {} }]
+              })
+            }
+          }
+        };
+
+        const fn1 = new Function('window', 'document', 'localStorage', 'sessionStorage', 'navigator', 'onLoopCall', code + '\\n' + `
+          streamLoop = function(v) { onLoopCall(); };
+          return enableCloudWebcamMode().then(() => ({
+            streamingActive,
+            isCloudMode,
+            hasStream: !!browserWebcamStream
+          }));
+        `);
+
+        fn1(win1, mockDoc, mockStorage, mockStorage, win1.navigator, () => { streamLoopCalls++; })
+          .then((res1) => {
+            // Test 2: Error separation for permission denial
+            let permissionToasts = [];
+            const win2 = {
+              location: { hostname: 'preview.vercel.app', protocol: 'https:' },
+              addEventListener: () => {},
+              navigator: {
+                mediaDevices: {
+                  getUserMedia: async () => {
+                    const e = new Error('User blocked camera');
+                    e.name = 'NotAllowedError';
+                    throw e;
+                  }
+                }
+              }
+            };
+
+            const fn2 = new Function('window', 'document', 'localStorage', 'sessionStorage', 'navigator', 'onToast', code + '\\n' + `
+              showToast = function(msg, type) { onToast(msg, type); };
+              return enableCloudWebcamMode();
+            `);
+
+            return fn2(win2, mockDoc, mockStorage, mockStorage, win2.navigator, (msg, type) => {
+              permissionToasts.push({ msg, type });
+            }).then(() => ({
+              res1,
+              streamLoopCalls,
+              permissionToasts
+            }));
+          })
+          .then((out) => {
+            console.log(JSON.stringify(out));
+            process.exit(0);
+          });
+        """
+        proc = subprocess.run(["node", "-e", node_script], cwd=str(root), capture_output=True, text=True, check=True)
+        data = json.loads(proc.stdout.strip())
+        self.assertTrue(data["res1"]["streamingActive"])
+        self.assertTrue(data["res1"]["isCloudMode"])
+        self.assertTrue(data["res1"]["hasStream"])
+        self.assertEqual(data["streamLoopCalls"], 1)
+
+        # Check permission error toast
+        p_toasts = data["permissionToasts"]
+        self.assertGreaterEqual(len(p_toasts), 1)
+        self.assertIn("Webcam permission denied: User blocked camera", p_toasts[0]["msg"])
 
 
 if __name__ == "__main__":

@@ -30,17 +30,20 @@ const DEV_MOCK_MODE = false;
 
 const RENDER_BACKEND_URL = "https://isl-recognition-backend.onrender.com";
 
+function isLocalhostEnvironment() {
+  return (
+    typeof window !== "undefined" &&
+    window.location &&
+    (window.location.hostname === "localhost" ||
+     window.location.hostname === "127.0.0.1" ||
+     window.location.protocol === "file:")
+  );
+}
+
 function getApiUrl(endpoint) {
   let base = window.ISL_BACKEND_URL || localStorage.getItem("isl_backend_url");
   if (!base) {
-    const isLocalhost = (
-      typeof window !== "undefined" &&
-      window.location &&
-      (window.location.hostname === "localhost" ||
-       window.location.hostname === "127.0.0.1" ||
-       window.location.protocol === "file:")
-    );
-    base = isLocalhost ? "" : RENDER_BACKEND_URL;
+    base = isLocalhostEnvironment() ? "" : RENDER_BACKEND_URL;
   }
   if (!base) return endpoint;
   const cleanBase = base.replace(/\/+$/, "");
@@ -867,8 +870,9 @@ async function enableCloudWebcamMode() {
     return;
   }
 
+  let stream = null;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
+    stream = await navigator.mediaDevices.getUserMedia({
       video: {
         width: { ideal: 640 },
         height: { ideal: 480 },
@@ -876,7 +880,27 @@ async function enableCloudWebcamMode() {
       },
       audio: false
     });
+  } catch (err) {
+    console.warn("[Camera] getUserMedia failed:", err);
+    if ($cameraOverlay) {
+      $cameraOverlay.style.display = "flex";
+      if ($cameraOverlayMsg) {
+        $cameraOverlayMsg.textContent = "Webcam permission required. Click Reconnect to grant access.";
+      }
+    }
+    const isPermissionError = (
+      err.name === "NotAllowedError" ||
+      err.name === "PermissionDeniedError" ||
+      err.name === "SecurityError"
+    );
+    const msg = isPermissionError
+      ? "Webcam permission denied: " + err.message
+      : "Webcam device error: " + (err.message || err.name);
+    showToast(msg, "error");
+    return;
+  }
 
+  try {
     browserWebcamStream = stream;
     videoEl.srcObject = stream;
     await videoEl.play();
@@ -895,18 +919,18 @@ async function enableCloudWebcamMode() {
     if ($cameraOverlay) {
       $cameraOverlay.style.display = "none";
     }
+  } catch (err) {
+    console.error("[Camera] Video initialization error:", err);
+    showToast("Video display error: " + err.message, "error");
+    return;
+  }
 
+  try {
     startCameraSession();
     showToast("Webcam connected. Vision tracking active.", "success");
   } catch (err) {
-    console.warn("[Camera] getUserMedia failed:", err);
-    if ($cameraOverlay) {
-      $cameraOverlay.style.display = "flex";
-      if ($cameraOverlayMsg) {
-        $cameraOverlayMsg.textContent = "Webcam permission required. Click Reconnect to grant access.";
-      }
-    }
-    showToast("Webcam permission denied: " + err.message, "error");
+    console.error("[Camera] Session activation error:", err);
+    showToast("Camera session activation error: " + err.message, "error");
   }
 }
 
@@ -921,12 +945,24 @@ function startCameraSession() {
   const isLocal = isLocalhostEnvironment();
   const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
 
-  if ($cameraImg && isLocal && $cameraImg.dataset.activeSrc) {
+  streamingActive = true;
+
+  if (!isCloudMode && isLocal && $cameraImg && $cameraImg.dataset.activeSrc) {
+    // Local hardware camera (Flask MJPEG stream)
     $cameraImg.src = getApiUrl("/video_feed?t=" + Date.now());
     $cameraImg.style.display = "block";
-    streamingActive = true;
+  } else if (browserWebcamStream && videoEl) {
+    // Cloud browser webcam: stream is active, resume playback & start streaming loop
+    videoEl.play().catch(() => {});
+    videoEl.style.display = "block";
+    if ($cameraImg) $cameraImg.style.display = "none";
+    if ($cameraOverlay) $cameraOverlay.style.display = "none";
+    streamLoop(videoEl);
   } else {
+    // Cloud browser webcam: stream not yet initialized, acquire media
+    streamingActive = false;
     enableCloudWebcamMode();
+    return;
   }
 
   if ($sessionBtnText) $sessionBtnText.textContent = "STOP CAMERA";
@@ -1100,13 +1136,7 @@ function scheduleNextFrame(videoEl, startTime) {
 
 async function checkEnvironmentAndInitWebcam() {
   const urlParams = new URLSearchParams(window.location.search);
-  const isRemote = (
-    typeof window !== "undefined" &&
-    window.location &&
-    window.location.hostname !== "localhost" &&
-    window.location.hostname !== "127.0.0.1" &&
-    window.location.protocol !== "file:"
-  );
+  const isRemote = !isLocalhostEnvironment();
   const forceCloud = urlParams.get("mode") === "cloud" || window.FORCE_CLOUD_CAMERA === true || isRemote;
 
   if (forceCloud) {
@@ -2000,6 +2030,13 @@ function toggleHudOverlay() {
 function reconnectCameraStream() {
   if (isCloudMode) {
     showToast("Re-initializing browser webcam...", "info");
+    if (browserWebcamStream) {
+      browserWebcamStream.getTracks().forEach((t) => {
+        try { t.stop(); } catch (e) {}
+      });
+      browserWebcamStream = null;
+    }
+    streamingActive = false;
     enableCloudWebcamMode();
     return;
   }
