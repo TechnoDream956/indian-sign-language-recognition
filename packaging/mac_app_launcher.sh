@@ -13,9 +13,19 @@ set -e
 # Resolve absolute path of this executable's directory
 MACOS_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Project root is exactly 4 levels up:
-# Contents/MacOS (0) -> Contents (1) -> ISL Translator.app (2) -> dist (3) -> Project Root (4)
-PROJECT_ROOT="$(cd "$MACOS_DIR/../../../.." && pwd)"
+# Dynamically resolve project root:
+# 1. Inside dist/ISL Translator.app (4 levels up)
+# 2. Inside root ISL Translator.app (3 levels up)
+# 3. Known project directory fallback
+if [ -f "$MACOS_DIR/../../../../packaging/launcher.py" ]; then
+    PROJECT_ROOT="$(cd "$MACOS_DIR/../../../.." && pwd)"
+elif [ -f "$MACOS_DIR/../../../packaging/launcher.py" ]; then
+    PROJECT_ROOT="$(cd "$MACOS_DIR/../../.." && pwd)"
+elif [ -d "/Users/aroitsehrawat2030/Downloads/Indian-Sign-Language-Recognition" ] && [ -f "/Users/aroitsehrawat2030/Downloads/Indian-Sign-Language-Recognition/packaging/launcher.py" ]; then
+    PROJECT_ROOT="/Users/aroitsehrawat2030/Downloads/Indian-Sign-Language-Recognition"
+else
+    PROJECT_ROOT="$(cd "$MACOS_DIR/../../.." && pwd)"
+fi
 
 # Verify Python Virtual Environment
 VENV_PYTHON="$PROJECT_ROOT/venv/bin/python"

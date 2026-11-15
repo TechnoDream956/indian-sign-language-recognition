@@ -24,7 +24,7 @@
       <div class="header-brand">
         <div class="brand-title-row">
           <h1 class="brand-title">ISL Translator</h1>
-          <span class="badge-version">v2.6 Pro</span>
+          <span class="badge-version">v2.5 Local Desktop</span>
         </div>
         <p class="brand-tagline">Neural Indian Sign Language Recognition &amp; Multilingual Voice Synthesis</p>
       </div>
@@ -77,9 +77,9 @@
           <span class="action-icon" id="session-btn-icon">⏹</span>
           <span id="session-btn-text">STOP CAMERA</span>
         </button>
-        <button class="btn-header-quit" id="btn-quit-app" type="button" title="End current website session and release all resources" aria-label="Quit Website / Quit App">
+        <button class="btn-header-quit" id="btn-quit-app" type="button" title="Quit ISL Translator and stop background application" aria-label="Quit Application / Quit App">
           <span class="action-icon">🚪</span>
-          <span>QUIT WEBSITE</span>
+          <span>QUIT APPLICATION</span>
           <span class="sr-only" style="display:none;">Quit App</span>
         </button>
       </div>
@@ -131,7 +131,7 @@
               width="640"
               height="480"
               class="camera-stream"
-              style="display:none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; transform: scaleX(-1); object-fit: cover;"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; object-fit: cover;"
             ></canvas>
 
             <!-- Visual Loading Skeleton -->
@@ -889,21 +889,21 @@
       <div class="modal-header">
         <div class="modal-title-wrap">
           <span class="modal-icon">🚪</span>
-          <h3 class="modal-title" id="quit-confirm-title">Quit Website Session</h3>
+          <h3 class="modal-title" id="quit-confirm-title">Quit Application</h3>
         </div>
         <button class="modal-close-btn" id="btn-close-quit-modal" type="button" aria-label="Cancel">&times;</button>
       </div>
       <div class="modal-body">
         <p class="modal-lead-desc">
-          Are you sure you want to quit the current ISL Translator session?
+          Are you sure you want to quit ISL Translator?
         </p>
         <p class="modal-sub-desc">
-          This will stop all webcam streams, cancel in-flight audio/speech, terminate background listeners, and safely release browser resources. Your saved feedback learning models and global contributions will remain preserved.
+          This will release your MacBook camera, terminate all neural recognition pipelines, and safely shut down the local background server. Your saved models and custom feedback will remain preserved.
         </p>
       </div>
       <div class="modal-footer">
-        <button class="modal-action-btn secondary" id="btn-cancel-quit" type="button">Stay on Website</button>
-        <button class="modal-action-btn danger" id="btn-confirm-quit" type="button">Yes, Quit Session</button>
+        <button class="modal-action-btn secondary" id="btn-cancel-quit" type="button">Cancel</button>
+        <button class="modal-action-btn danger" id="btn-confirm-quit" type="button">Quit Application</button>
       </div>
     </div>
   </div>

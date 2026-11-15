@@ -31,10 +31,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application source code, models, and public assets
+# Copy application source code and models
 COPY models/ models/
 COPY src/ src/
-COPY public/ public/
 COPY run_app.sh .
 
 EXPOSE 5001

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>ISL Translator</string>
+    <key>CFBundleDisplayName</key>
+    <string>ISL Translator</string>
+    <key>CFBundleIdentifier</key>
+    <string>org.isl.translator</string>
+    <key>CFBundleVersion</key>
+    <string>2.5.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>2.5.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleExecutable</key>
+    <string>ISL Translator</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSCameraUsageDescription</key>
+    <string>ISL Translator requires access to your MacBook camera for real-time sign language recognition.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>ISL Translator requires audio subsystem access for speech synthesis.</string>
+</dict>
+</plist>

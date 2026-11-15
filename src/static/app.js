@@ -330,6 +330,21 @@ function showToast(message, type = "info") {
 
 function renderLandmarks(landmarks) {
   if (!$landmarkCanvas) return;
+
+  // Synchronize canvas coordinate resolution with media dimensions
+  const videoEl = $browserWebcamVideo || document.getElementById("browser-webcam-video");
+  if (videoEl && videoEl.videoWidth && videoEl.videoHeight) {
+    if ($landmarkCanvas.width !== videoEl.videoWidth || $landmarkCanvas.height !== videoEl.videoHeight) {
+      $landmarkCanvas.width = videoEl.videoWidth;
+      $landmarkCanvas.height = videoEl.videoHeight;
+    }
+  } else if ($cameraImg && $cameraImg.naturalWidth && $cameraImg.naturalHeight) {
+    if ($landmarkCanvas.width !== $cameraImg.naturalWidth || $landmarkCanvas.height !== $cameraImg.naturalHeight) {
+      $landmarkCanvas.width = $cameraImg.naturalWidth;
+      $landmarkCanvas.height = $cameraImg.naturalHeight;
+    }
+  }
+
   const ctx = $landmarkCanvas.getContext("2d");
   const width = $landmarkCanvas.width;
   const height = $landmarkCanvas.height;
@@ -345,12 +360,13 @@ function renderLandmarks(landmarks) {
     if (!points || points.length < 21) return;
 
     // Palette: Hand 0 Cyan/Emerald, Hand 1 Purple/Rose
-    const boneColor = handIdx === 0 ? "rgba(56, 189, 248, 0.85)" : "rgba(192, 132, 252, 0.85)";
+    const boneColor = handIdx === 0 ? "rgba(6, 182, 212, 0.9)" : "rgba(168, 85, 247, 0.9)";
     const jointColor = handIdx === 0 ? "#10b981" : "#f43f5e";
 
-    // 1. Draw Skeleton Bone Lines
+    // 1. Draw Skeleton Bone Lines (single batched stroke for high FPS)
+    ctx.beginPath();
     ctx.strokeStyle = boneColor;
-    ctx.lineWidth = 2.8;
+    ctx.lineWidth = 3.0;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
@@ -358,12 +374,11 @@ function renderLandmarks(landmarks) {
       const p1 = points[i];
       const p2 = points[j];
       if (p1 && p2) {
-        ctx.beginPath();
         ctx.moveTo(p1[0] * width, p1[1] * height);
         ctx.lineTo(p2[0] * width, p2[1] * height);
-        ctx.stroke();
       }
     });
+    ctx.stroke();
 
     // 2. Draw Landmark Joint Nodes
     points.forEach((pt, idx) => {
@@ -373,11 +388,12 @@ function renderLandmarks(landmarks) {
       const isWrist = idx === 0;
 
       ctx.beginPath();
-      ctx.arc(x, y, isTip ? 4.5 : (isWrist ? 4.0 : 3.0), 0, 2 * Math.PI);
+      const radius = isTip ? 5.5 : (isWrist ? 6.0 : 3.5);
+      ctx.arc(x, y, radius, 0, 2 * Math.PI);
       ctx.fillStyle = isTip ? "#fbbf24" : (isWrist ? "#38bdf8" : jointColor);
       ctx.fill();
       ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.4;
       ctx.stroke();
     });
   });
@@ -934,8 +950,21 @@ async function enableCloudWebcamMode() {
   }
 }
 
-function startCameraSession() {
+// ------------------------------------------------------------------ //
+//  Camera Lifecycle State Machine Subsystem                          //
+// ------------------------------------------------------------------ //
+
+let cameraLifecycleState = "STOPPED"; // "STOPPED" | "STARTING" | "RUNNING" | "STOPPING"
+
+async function startCameraSession() {
   if (isSessionTerminated) return;
+  if (cameraLifecycleState === "STARTING" || cameraLifecycleState === "RUNNING") return;
+
+  cameraLifecycleState = "STARTING";
+  if ($btnSessionToggle) {
+    $btnSessionToggle.classList.add("transitioning");
+    $btnSessionToggle.disabled = true;
+  }
 
   if (streamLoopTimer) {
     clearTimeout(streamLoopTimer);
@@ -947,54 +976,89 @@ function startCameraSession() {
 
   streamingActive = true;
 
-  if (!isCloudMode && isLocal && $cameraImg && $cameraImg.dataset.activeSrc) {
-    // Local hardware camera (Flask MJPEG stream)
-    $cameraImg.src = getApiUrl("/video_feed?t=" + Date.now());
-    $cameraImg.style.display = "block";
-  } else if (browserWebcamStream && videoEl) {
-    // Cloud browser webcam: stream is active, resume playback & start streaming loop
-    videoEl.play().catch(() => {});
-    videoEl.style.display = "block";
-    if ($cameraImg) $cameraImg.style.display = "none";
-    if ($cameraOverlay) $cameraOverlay.style.display = "none";
-    streamLoop(videoEl);
-  } else {
-    // Cloud browser webcam: stream not yet initialized, acquire media
+  try {
+    if (!isCloudMode && isLocal && $cameraImg) {
+      // Local hardware camera (Flask MJPEG stream)
+      $cameraImg.src = getApiUrl("/video_feed?t=" + Date.now());
+      $cameraImg.style.display = "block";
+      if (videoEl) videoEl.style.display = "none";
+      if ($landmarkCanvas) {
+        $landmarkCanvas.style.display = "block";
+      }
+      fetch(getApiUrl("/api/camera/start"), { method: "POST" }).catch(() => {});
+    } else if (browserWebcamStream && videoEl) {
+      // Cloud browser webcam: stream is active, resume playback & start streaming loop
+      await videoEl.play().catch(() => {});
+      videoEl.style.display = "block";
+      if ($cameraImg) $cameraImg.style.display = "none";
+      if ($cameraOverlay) $cameraOverlay.style.display = "none";
+      if ($landmarkCanvas) $landmarkCanvas.style.display = "block";
+      streamLoop(videoEl);
+    } else {
+      // Cloud browser webcam: stream not yet initialized, acquire media
+      streamingActive = false;
+      cameraLifecycleState = "STOPPED";
+      if ($btnSessionToggle) {
+        $btnSessionToggle.classList.remove("transitioning");
+        $btnSessionToggle.disabled = false;
+      }
+      enableCloudWebcamMode();
+      return;
+    }
+
+    cameraLifecycleState = "RUNNING";
+    if ($sessionBtnText) $sessionBtnText.textContent = "STOP CAMERA";
+    const $sessionIcon = document.getElementById("session-btn-icon");
+    if ($sessionIcon) $sessionIcon.textContent = "⏹";
+
+    if ($btnSessionToggle) {
+      $btnSessionToggle.classList.remove("stopped", "transitioning");
+      $btnSessionToggle.classList.add("running");
+      $btnSessionToggle.disabled = false;
+      $btnSessionToggle.title = "Stop Camera stream and freeze recognition";
+    }
+
+    const $liveIndicator = document.getElementById("live-indicator");
+    if ($liveIndicator) {
+      $liveIndicator.textContent = "LIVE";
+      $liveIndicator.className = "stream-indicator live";
+    }
+
+    // Resume authenticated SSE stream
+    if (!isSessionTerminated) {
+      connectSSE();
+    }
+
+    showToast("Camera started. Recognition active.", "success");
+  } catch (err) {
+    console.error("[Camera] Start error:", err);
+    cameraLifecycleState = "STOPPED";
     streamingActive = false;
-    enableCloudWebcamMode();
-    return;
+    if ($btnSessionToggle) {
+      $btnSessionToggle.classList.remove("transitioning");
+      $btnSessionToggle.disabled = false;
+    }
+    showToast("Camera start error: " + (err.message || err), "error");
   }
-
-  if ($sessionBtnText) $sessionBtnText.textContent = "STOP CAMERA";
-  const $sessionIcon = document.getElementById("session-btn-icon");
-  if ($sessionIcon) $sessionIcon.textContent = "⏹";
-
-  if ($btnSessionToggle) {
-    $btnSessionToggle.classList.remove("stopped");
-    $btnSessionToggle.classList.add("running");
-    $btnSessionToggle.title = "Stop Camera stream and freeze recognition";
-  }
-
-  const $liveIndicator = document.getElementById("live-indicator");
-  if ($liveIndicator) {
-    $liveIndicator.textContent = "LIVE";
-    $liveIndicator.className = "stream-indicator live";
-  }
-
-  // Resume authenticated SSE stream
-  if (!isSessionTerminated) {
-    connectSSE();
-  }
-
-  showToast("Camera started. Recognition active.", "success");
 }
 
-function stopCameraSession() {
+async function stopCameraSession() {
+  if (cameraLifecycleState === "STOPPING" || cameraLifecycleState === "STOPPED") return;
+
+  cameraLifecycleState = "STOPPING";
+  if ($btnSessionToggle) {
+    $btnSessionToggle.classList.add("transitioning");
+    $btnSessionToggle.disabled = true;
+  }
+
   streamingActive = false;
   if (streamLoopTimer) {
     clearTimeout(streamLoopTimer);
     streamLoopTimer = null;
   }
+
+  // Notify backend hardware loop
+  fetch(getApiUrl("/api/camera/stop"), { method: "POST" }).catch(() => {});
 
   // Invalidate in-flight frame responses so pending predictions are discarded
   monotonicFrameSeq += 1000;
@@ -1028,13 +1092,15 @@ function stopCameraSession() {
     ctx.clearRect(0, 0, $landmarkCanvas.width, $landmarkCanvas.height);
   }
 
+  cameraLifecycleState = "STOPPED";
   if ($sessionBtnText) $sessionBtnText.textContent = "START CAMERA";
   const $sessionIcon = document.getElementById("session-btn-icon");
   if ($sessionIcon) $sessionIcon.textContent = "▶";
 
   if ($btnSessionToggle) {
-    $btnSessionToggle.classList.remove("running");
+    $btnSessionToggle.classList.remove("running", "transitioning");
     $btnSessionToggle.classList.add("stopped");
+    $btnSessionToggle.disabled = false;
     $btnSessionToggle.title = "Start Camera stream and resume recognition";
   }
 
@@ -1048,7 +1114,11 @@ function stopCameraSession() {
 }
 
 function toggleCameraSession() {
-  if (streamingActive) {
+  if (cameraLifecycleState === "STARTING" || cameraLifecycleState === "STOPPING") {
+    console.debug("[Camera State] Toggle ignored during transition:", cameraLifecycleState);
+    return;
+  }
+  if (cameraLifecycleState === "RUNNING" || streamingActive) {
     stopCameraSession();
   } else {
     startCameraSession();
@@ -1974,9 +2044,11 @@ function syncMirroring() {
     videoEl.style.transform = isMirrored ? "scaleX(-1)" : "scaleX(1)";
   }
   if ($landmarkCanvas) {
-    $landmarkCanvas.classList.toggle("mirrored", isMirrored);
-    $landmarkCanvas.classList.toggle("unmirrored", !isMirrored);
-    $landmarkCanvas.style.transform = isMirrored ? "scaleX(-1)" : "scaleX(1)";
+    // Canvas receives normalized coordinates matching the active mirrored viewport.
+    // We explicitly avoid applying scaleX(-1) to canvas to prevent double-inversion.
+    $landmarkCanvas.classList.toggle("mirrored", false);
+    $landmarkCanvas.classList.toggle("unmirrored", true);
+    $landmarkCanvas.style.transform = "none";
   }
 }
 
@@ -2824,7 +2896,8 @@ function performCompleteSessionQuit() {
   isSessionTerminated = true;
   streamingActive = false;
 
-  // 2. Stop camera tracks and release media
+  // 2. Stop camera tracks, notify backend, and release media
+  fetch(getApiUrl("/api/camera/stop"), { method: "POST" }).catch(() => {});
   if (streamLoopTimer) {
     clearTimeout(streamLoopTimer);
     streamLoopTimer = null;

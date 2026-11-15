@@ -232,7 +232,10 @@ class TestFeedbackCorrectionAndControls(unittest.TestCase):
     def test_redundant_pause_camera_button_absent(self):
         """Verify that obsolete #btn-toggle-camera button is removed from all templates."""
         root = Path(__file__).resolve().parent.parent
-        for template_path in [root / "src" / "templates" / "index.html", root / "public" / "index.html"]:
+        template_paths = [root / "src" / "templates" / "index.html"]
+        if (root / "public" / "index.html").exists():
+            template_paths.append(root / "public" / "index.html")
+        for template_path in template_paths:
             html = template_path.read_text(encoding="utf-8")
             self.assertNotIn('id="btn-toggle-camera"', html)
             self.assertNotIn("Pause Camera", html)
@@ -240,27 +243,31 @@ class TestFeedbackCorrectionAndControls(unittest.TestCase):
     def test_global_camera_toggle_present(self):
         """Verify that global #btn-session-toggle is present in all templates."""
         root = Path(__file__).resolve().parent.parent
-        for template_path in [root / "src" / "templates" / "index.html", root / "public" / "index.html"]:
+        template_paths = [root / "src" / "templates" / "index.html"]
+        if (root / "public" / "index.html").exists():
+            template_paths.append(root / "public" / "index.html")
+        for template_path in template_paths:
             html = template_path.read_text(encoding="utf-8")
             self.assertIn('id="btn-session-toggle"', html)
 
     def test_frontend_files_synchronization(self):
-        """Verify that canonical and deployment frontend files are synchronized."""
+        """Verify that canonical frontend files are present and valid."""
         root = Path(__file__).resolve().parent.parent
 
         src_app_js = (root / "src" / "static" / "app.js").read_text(encoding="utf-8")
-        pub_app_js = (root / "public" / "app.js").read_text(encoding="utf-8")
-        pub_static_app_js = (root / "public" / "static" / "app.js").read_text(encoding="utf-8")
-
-        self.assertEqual(src_app_js, pub_app_js, "src/static/app.js != public/app.js")
-        self.assertEqual(src_app_js, pub_static_app_js, "src/static/app.js != public/static/app.js")
-
         src_css = (root / "src" / "static" / "style.css").read_text(encoding="utf-8")
-        pub_css = (root / "public" / "style.css").read_text(encoding="utf-8")
-        pub_static_css = (root / "public" / "static" / "style.css").read_text(encoding="utf-8")
+        self.assertTrue(len(src_app_js) > 1000)
+        self.assertTrue(len(src_css) > 1000)
 
-        self.assertEqual(src_css, pub_css, "src/static/style.css != public/style.css")
-        self.assertEqual(src_css, pub_static_css, "src/static/style.css != public/static/style.css")
+        pub_app_js = root / "public" / "app.js"
+        if pub_app_js.exists():
+            pub_static_app_js = root / "public" / "static" / "app.js"
+            self.assertEqual(src_app_js, pub_app_js.read_text(encoding="utf-8"))
+            self.assertEqual(src_app_js, pub_static_app_js.read_text(encoding="utf-8"))
+            pub_css = root / "public" / "style.css"
+            pub_static_css = root / "public" / "static" / "style.css"
+            self.assertEqual(src_css, pub_css.read_text(encoding="utf-8"))
+            self.assertEqual(src_css, pub_static_css.read_text(encoding="utf-8"))
 
     def test_html_ui_elements_present(self):
         """Verify that correction modal, camera toggle, and exit screen exist in all HTML files."""
@@ -285,7 +292,10 @@ class TestFeedbackCorrectionAndControls(unittest.TestCase):
             "btn-return-to-app",
         ]
 
-        for template_path in [root / "src" / "templates" / "index.html", root / "public" / "index.html"]:
+        template_paths = [root / "src" / "templates" / "index.html"]
+        if (root / "public" / "index.html").exists():
+            template_paths.append(root / "public" / "index.html")
+        for template_path in template_paths:
             html = template_path.read_text(encoding="utf-8")
             for elem_id in required_ids:
                 self.assertIn(
@@ -327,11 +337,15 @@ class TestFeedbackCorrectionAndControls(unittest.TestCase):
         """Verify that frontend JavaScript uses header-based Fetch SSE without URL tokens and handles cancellation."""
         root = Path(__file__).resolve().parent.parent
 
-        for js_path in [
+        candidate_paths = [
             root / "src" / "static" / "app.js",
             root / "public" / "app.js",
             root / "public" / "static" / "app.js",
-        ]:
+        ]
+        js_paths = [p for p in candidate_paths if p.exists()]
+        self.assertTrue(len(js_paths) >= 1)
+
+        for js_path in js_paths:
             content = js_path.read_text(encoding="utf-8")
 
             # Must NEVER place tokens in the SSE URL
@@ -353,11 +367,15 @@ class TestFeedbackCorrectionAndControls(unittest.TestCase):
 
         root = Path(__file__).resolve().parent.parent
 
-        for js_path in [
+        candidate_paths = [
             root / "src" / "static" / "app.js",
             root / "public" / "app.js",
             root / "public" / "static" / "app.js",
-        ]:
+        ]
+        js_paths = [p for p in candidate_paths if p.exists()]
+        self.assertTrue(len(js_paths) >= 1)
+
+        for js_path in js_paths:
             content = js_path.read_text(encoding="utf-8")
             self.assertIn("function isLocalhostEnvironment()", content, f"Helper missing in {js_path}")
             self.assertIn("const isLocal = isLocalhostEnvironment();", content, f"Call missing in {js_path}")
@@ -399,11 +417,15 @@ class TestFeedbackCorrectionAndControls(unittest.TestCase):
 
         root = Path(__file__).resolve().parent.parent
 
-        for js_path in [
+        candidate_paths = [
             root / "src" / "static" / "app.js",
             root / "public" / "app.js",
             root / "public" / "static" / "app.js",
-        ]:
+        ]
+        js_paths = [p for p in candidate_paths if p.exists()]
+        self.assertTrue(len(js_paths) >= 1)
+
+        for js_path in js_paths:
             content = js_path.read_text(encoding="utf-8")
             self.assertIn("streamLoop(videoEl)", content)
             self.assertIn("streamingActive = true;", content)
