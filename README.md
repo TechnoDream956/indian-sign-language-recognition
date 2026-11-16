@@ -23,8 +23,8 @@ An edge-deployable assistive platform that transcribes live Indian Sign Language
 - **Hand Gating Router:** Dispatches camera frames between single-hand (63D) and dual-hand invariant (144D) geometric MLP classifiers.
 - **Multi-Modal Decision Fusion:** Blends skeletal landmark geometry with an appearance CNN (128×128 RGB crop) using confidence-weighted voting.
 - **Temporal WordBuffer:** Debounces predictions (1.2 s hold time), rejects spurious hand transitions, and supports hands-free text editing.
-- **10-Language Indic Translation:** Sub-millisecond offline dictionary mapping for common phrases into Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati, Kannada, Malayalam, Punjabi, and English.
-- **4-Tier Speech Synthesis:** Auditory feedback using macOS `say` $\to$ `pyttsx3` $\to$ `gTTS` $\to$ Browser Web Speech API.
+- **10-Language Indic Translation:** Sub-millisecond offline dictionary mapping for common phrases into Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati, Kannada, Malayalam, Punjabi, and English (dictionary-based for a limited vocabulary, not reviewed by native speakers). Optional neural IndicTrans2 and Meta MMS-TTS modules are implemented in `src/language_services/` (not on default camera path).
+- **4-Tier Speech Synthesis:** Auditory feedback using macOS `say` $\to$ `pyttsx3` $\to$ `gTTS` $\to$ Browser Web Speech API. Optional Meta MMS-TTS neural speech synthesis is implemented in `src/language_services/`.
 - **Cross-Platform Delivery:** Runs as a responsive browser interface (Flask + SSE) or a standalone macOS desktop application (`ISL Translator.app`).
 
 ### What It Does NOT Do
@@ -90,9 +90,9 @@ flowchart TD
    - Provides hands-free word assembly, space injection, backspace deletion, and buffer reset.
 
 3. **Multilingual Translation & Multi-Tier Audio (`src/translator.py`, `src/tts_engine.py`):**
-   - Sub-5 ms instant dictionary translation for common greeting and emergency phrases.
+   - Sub-5 ms instant dictionary translation for common greeting and emergency phrases (dictionary-based translations for a limited vocabulary, not reviewed by native speakers).
    - Resilient speech synthesis chain: macOS native `say` $\to$ `pyttsx3` $\to$ `gTTS` $\to$ Web Speech API.
-   - Optional neural extensions (`IndicTrans2` ONNX and Meta `MMS-TTS`) implemented for research evaluation.
+   - Optional neural modules (`IndicTrans2` ONNX and Meta `MMS-TTS`) are implemented in `src/language_services/` (not on default real-time camera path), with benchmarks reported in `tests/benchmark_languages.py`.
 
 ---
 

@@ -51,12 +51,12 @@ def build_chapter4(doc: Document):
         table6.rows[0].cells[idx].text = h
 
     goals_eval_data = [
-        ("G-01", "Kinematic Perception", "Partly Met", "MediaPipe Hands extracts 21 3D landmarks per hand at 22.6 FPS sustained full pipeline throughput. Active dual-hand frame latency is 39.99 ms median / 44.16 ms mean on CPU, exceeding the 20 ms inference-only target due to rendering and pipeline overhead."),
-        ("G-02", "Alphabet Recognition", "Met", "Dual-hand 144D baseline achieves 78.19% Top-1 accuracy [72.43%, 83.13%] on held-out same-signer test partition (N=243); single-hand model achieves 75.93% on N=536 held-out test partition. Both exceed the 75% target."),
-        ("G-03", "Decision Fusion & Gating", "Met", "Multi-modal fusion implemented in src/fusion_engine.py with calibrated weights (0.65 landmark, 0.35 CNN), +0.10 agreement bonus, and 0.50 threshold. Disagreement arbitration preserves landmark authority."),
-        ("G-04", "Temporal Smoothing", "Met", "WordBuffer state machine in src/sentence_decoder.py implements 1.2 s debouncing and 5-frame stability confirmation. Reduced flapping by 85.7% (7 flaps to 1) on a synthetic 50-frame dropout sequence."),
-        ("G-05", "Multilingual Translation", "Met", "Curated local dictionary in src/translator.py translates text into 10 regional Indian languages in 0.001 ms (< 5 ms target) with zero cloud dependency for listed vocabulary; online MyMemory fallback cached to disk."),
-        ("G-06", "Speech Output", "Met", "Multi-tier speech engine in src/tts_engine.py provides functional vocalization across all 10 languages (macOS say, pyttsx3, gTTS, Web Speech API). Local synthesis launch is responsive (< 100 ms).")
+        ("G-01", "Kinematic Perception", "Partly Met", "MediaPipe Hands extracts 21 3D landmarks per hand. Measured full pipeline sustained throughput is 22.6 FPS (39.99 ms median / 44.16 ms mean on CPU on active dual-hand frames). While landmark inference itself is fast (14.62 ms median for AlphabetEngine decision), full frame processing exceeds the 20 ms target due to camera ingestion, OpenCV drawing, and JPEG encoding."),
+        ("G-02", "Alphabet Recognition", "Met", "Dual-hand 144D baseline achieves 78.19% Top-1 accuracy [72.43%, 83.13%] on held-out same-signer test partition (N=243) and 77.16% on deduplicated partition (N=232); single-hand model achieves 75.93% on N=536 held-out test partition. Both exceed the 75% target."),
+        ("G-03", "Decision Fusion & Gating", "Partly Met", "Multi-modal decision fusion is implemented in src/fusion_engine.py with code-aligned weights (0.65 geometry, 0.35 CNN, +0.10 agreement bonus, 0.50 threshold). However, clean fused accuracy (78.19%) equals the geometry branch alone and is below CNN alone (82.72%) on the held-out test set, demonstrating no empirical accuracy gain offline."),
+        ("G-04", "Temporal Smoothing", "Met", "WordBuffer state machine in src/sentence_decoder.py implements 1.2 s debouncing and 5-frame stability confirmation. Reduced hand-count flapping by 85.7% (from 7 switches to 1) on a synthetic 50-frame dropout test sequence."),
+        ("G-05", "Multilingual Translation", "Met", "Dictionary-based translations for a limited vocabulary (not reviewed by native speakers) in src/translator.py translates text into 10 regional Indian languages in < 0.01 ms (< 5 ms target) with zero cloud dependency for listed vocabulary; optional IndicTrans2 module implemented in src/language_services."),
+        ("G-06", "Speech Output", "Met", "Multi-tier speech engine in src/tts_engine.py provides functional vocalization across all 10 languages (macOS say, pyttsx3, gTTS, Web Speech API) with sub-second dispatch; optional Meta MMS-TTS module implemented in src/language_services.")
     ]
 
     for r_idx, row in enumerate(goals_eval_data, start=1):
@@ -93,8 +93,9 @@ def build_chapter4(doc: Document):
 
     add_bullet_p(
         doc,
-        "A multilingual translation engine supporting 10 regional Indian languages with offline dictionary mapping and fallback, "
-        "alongside an int8-quantized IndicTrans2 neural translation module implemented for offline research evaluation.",
+        "A multilingual translation engine supporting 10 regional Indian languages via dictionary mapping for a limited vocabulary "
+        "(not reviewed by native speakers), alongside an int8-quantized IndicTrans2 neural translation module implemented in "
+        "src/language_services/ as an optional offline module.",
         bold_prefix="Multilingual Translation Subsystem: "
     )
 

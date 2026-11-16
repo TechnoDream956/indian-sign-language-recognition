@@ -428,13 +428,18 @@ def build_chapter3(doc: Document):
         "achieved 78.19% and CNN alone achieved 82.72%. Multi-modal decision fusion without the K/T override matched the Geometry branch at 78.19% "
         "(0.00% gain) and was below CNN alone (82.72%). With the K/T override, fusion matched Geometry(+KT) at 83.13% (0.00% gain). "
         "Crucially, the visual CNN appears to be trained on a single signer's photos under fixed lighting, and is suspected from our audit to generalize poorly live "
-        "to novel signers (to be confirmed with live multi-signer data), so this offline ranking says nothing about live real-world performance. "
-        "Evaluated strictly using the clean baseline geometry (WITHOUT K/T override) against CNN, the two branches agreed on 186 out of "
-        "243 samples (76.54%), achieving 100.0% accuracy on this agreement subset (186/186). On the 57 samples where the branches disagreed (23.46%), "
-        "they cannot both be correct: Geometry was correct on 4 samples (7.02%), CNN was correct on 15 samples (26.32%), and neither was correct "
-        "on 38 samples (66.67%). On the de-duplicated test set (N=232, 11 near-duplicates removed): 175 agreed (100.0% accuracy) and 57 disagreed "
-        "(Geometry right on 4, CNN right on 15, neither right on 38). (Separate reference: applying the post-hoc K/T override shifts 12 samples into agreement: "
-        "198 agree with 100% accuracy, and 45 disagree with Geometry right 4, CNN right 3, neither right 38)."
+        "to novel signers (to be confirmed with live multi-signer data), so this offline ranking says nothing about live real-world performance.\n\n"
+        "Two internally consistent agreement/disagreement evaluations were computed using tools/audit/audit_disagreement.py:\n"
+        "(A) Clean Baseline Geometry vs CNN (strictly WITHOUT K/T override): The two branches agreed on 186 out of 243 samples (76.54%), "
+        "achieving 100.0% accuracy on this agreement subset (186/186). On the 57 samples where the branches disagreed (23.46%), they cannot both be correct: "
+        "Geometry was right on 4 samples (7.02% of disagreements), CNN was right on 15 samples (26.32%), and neither was right on 38 samples (66.67%). "
+        "Identity verification confirms: Geometry correct = 186 + 4 = 190 (78.19%); CNN correct = 186 + 15 = 201 (82.72%); 4 + 15 + 38 = 57.\n"
+        "On the de-duplicated test set (N=232, 11 near-duplicates removed): 175 agreed (100.0% accuracy) and 57 disagreed (Geometry right on 4, CNN right on 15, neither right on 38; Geometry correct = 175 + 4 = 179 [77.16%], CNN correct = 175 + 15 = 190 [81.90%]).\n\n"
+        "(B) Post-Hoc K/T-Overridden Geometry vs CNN (*labeled: possibly tuned on test data): Applying the heuristic K/T override shifts 12 samples into agreement: "
+        "198 agreed (81.48%) with 100.0% accuracy (198/198), while 45 disagreed (18.52%). On these 45 disagreements: Geometry was right on 4 samples (8.89%), "
+        "CNN was right on 3 samples (6.67%), and neither was right on 38 samples (84.44%). Identity verification confirms: "
+        "Geometry correct = 198 + 4 = 202 (83.13%); CNN correct = 198 + 3 = 201 (82.72%); 4 + 3 + 38 = 45. "
+        "On the de-duplicated test set (N=232): 187 agreed (100.0% accuracy) and 45 disagreed (Geometry right 4, CNN right 3, neither right 38; Geometry correct = 187 + 4 = 191 [82.33%])."
     )
 
     # Insert Figure 8 (Benchmark Ablation)
@@ -453,8 +458,10 @@ def build_chapter3(doc: Document):
         "on the held-out same-signer test split, offline analysis and informal testing revealed pipeline fragility (formal live validation pending). "
         "An engineering diagnosis uncovered two primary root causes: (1) Camera Mirroring Inversion: training images are third-person frontal photos, "
         "whereas unadjusted selfie webcams invert horizontal coordinates, causing accuracy to drop from 78.19% to 29.22% "
-        "(-48.97% drop on held-out landmark data; live validation pending); (2) Hand Occlusion Drops: physical occlusion during signs like B, D, P dropped hand-count from 2 to 1, "
-        "which was reduced via a 2-frame temporal hysteresis filter yielding an 85.7% drop in flapping on a synthetic 50-frame dropout sequence, not real recordings. "
+        "(-48.97% drop on held-out landmark data; live validation pending); resolved via the model_input_unmirrored flag in src/inference_engine.py; "
+        "(2) Hand Occlusion Drops: physical occlusion during signs like B, D, P dropped hand-count from 2 to 1, "
+        "which was mitigated via a 2-frame temporal hysteresis filter in AlphabetEngine (tested in tests/test_dual_hand_alphabet.py, "
+        "yielding an 85.7% drop in flapping on a synthetic 50-frame dropout sequence, not real recordings). "
         "Table 4 documents the observed failure modes alongside their skeletal root causes."
     )
 

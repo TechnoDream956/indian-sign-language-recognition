@@ -103,12 +103,13 @@ def build_chapter2(doc: Document):
         "On the downstream linguistic side, translating transcribed sign text into Indian languages presents substantial challenges "
         "due to grammatical divergences between Indian Sign Language and spoken Indic vernaculars. Spoken Indian languages feature "
         "Subject-Object-Verb (SOV) sentence structuring and rich agglutinative morphology. Recent work "
-        "from AI4Bharat on IndicTrans2 (Gala et al., 2023) has established benchmark quality across all 22 scheduled Indian languages "
+        "from AI4Bharat on IndicTrans2 (Gala et al., 2023) established strong translation quality across all 22 scheduled Indian languages "
         "using a 200M parameter distilled Transformer architecture. For speech synthesis, Meta's Massively Multilingual Speech (MMS-TTS) "
         "project (Pratap et al., 2024) demonstrated high-fidelity Text-to-Speech synthesis across 1,107 languages using the VITS "
-        "end-to-end neural architecture. Our project implements a hybrid approach: instantaneous local dictionary lookup for core everyday phrases, "
-        "with online translation API fallback, while IndicTrans2 and Meta MMS-TTS are implemented in src/language_services as optional "
-        "offline neural research modules."
+        "end-to-end neural architecture. In this project, the primary real-time pipeline uses dictionary-based translations for a limited "
+        "vocabulary (not reviewed by native speakers) in src/translator.py, with multi-tier fallback TTS (macOS say -> pyttsx3 -> gTTS -> Web Speech API). "
+        "Additionally, IndicTrans2 and Meta MMS-TTS are implemented as optional modules in src/language_services (not on the default camera path), "
+        "where tests/benchmark_languages.py measures ~40–60 ms translation latency and 0.14–0.17 real-time factor on supported languages."
     )
 
     # Table 2: Comparative Literature Review
@@ -119,11 +120,11 @@ def build_chapter2(doc: Document):
         table2.rows[0].cells[idx].text = h
 
     lit_data = [
-        ("Subramanian et al. (2022)", "MediaPipe Holistic + Gated Recurrent Unit (MoP-GRU)", "RGB Camera (Skeletal Landmarks)", "13 Dynamic ISL Words", "R^2: 0.88; class F1 up to 0.95", "Evaluated on single signer; no fingerspelling alphabet; no translation or speech output."),
-        ("Adaloglou et al. (2022)", "Comparative 3D-CNN (I3D, ResNet3D) vs Skeletal GCN", "RGB Video & 2D/3D Landmarks", "Continuous Sign Glosses", "WER: 22.1%–38.6% across continuous benchmarks", "High computational overhead; requires discrete high-end GPUs; unusable on commodity CPU."),
-        ("Gala et al. (2023)", "IndicTrans2: 200M Distilled Quantized Transformer", "Text Token Sequences (En -> Indic)", "22 Scheduled Indian Languages", "chrF++: 58.2, BLEU: 31.8 (En->Hi on IN22-Gen)", "Text-to-text only; requires tight edge quantization (int8) to run locally on CPU."),
-        ("Pratap et al. (2024)", "Meta MMS-TTS: VITS End-to-End Neural Speech", "Phonemic / Text Sequences", "1,000+ Global Languages", "MOS: ~3.9–4.0 naturalness", "Requires PyTorch/SafeTensors runtime optimization and audio buffering for low latency."),
-        ("Camgoz et al. (2018)", "Attentive Encoder-Decoder Seq2Seq Gloss Translation", "Continuous Video Frames", "German Sign Language (PHOENIX-2014T)", "BLEU-4: 18.13 (gloss-to-text)", "Gloss-level vocabulary; struggles with out-of-vocabulary words and names; cloud-bound."),
+        ("Subramanian et al. (2022)", "MediaPipe Holistic + Gated Recurrent Unit (MoP-GRU)", "RGB Camera (Skeletal Landmarks)", "13 Dynamic ISL Words", "Not directly comparable (dynamic gesture sequences on personal recordings; no published benchmark table)", "Evaluated on single signer; dynamic whole-word signs only; no fingerspelling alphabet; no speech output."),
+        ("Adaloglou et al. (2022)", "Comparative 3D-CNN (I3D, ResNet3D) vs Skeletal GCN", "RGB Video & 2D/3D Landmarks", "Continuous Sign Glosses", "Not directly comparable (continuous sign gloss translation on PHOENIX-14T / GSL, evaluated by Word Error Rate)", "High computational overhead; continuous gloss translation rather than isolated fingerspelling; requires discrete GPUs."),
+        ("Gala et al. (2023)", "IndicTrans2: 200M Distilled Quantized Transformer", "Text Token Sequences (En -> Indic)", "22 Scheduled Indian Languages", "Not directly comparable (text-to-text translation across 22 Indic languages on IN22-Gen, evaluated by chrF++ and BLEU)", "Text-to-text only; evaluated on general domain sentences; implemented in src/language_services as optional module."),
+        ("Pratap et al. (2024)", "Meta MMS-TTS: VITS End-to-End Neural Speech", "Phonemic / Text Sequences", "1,000+ Global Languages", "Not directly comparable (evaluates acoustic speech naturalness and character error rate across 1,107 speech models)", "Acoustic speech synthesis; evaluated on speech corpora; implemented in src/language_services as optional module."),
+        ("Camgoz et al. (2018)", "Attentive Encoder-Decoder Seq2Seq Gloss Translation", "Continuous Video Frames", "German Sign Language (PHOENIX-2014T)", "Not directly comparable (continuous sign video to text translation on PHOENIX-14T, evaluated by BLEU-4)", "Continuous gloss-to-text translation rather than isolated fingerspelling; evaluated on German Sign Language."),
         ("This Research (2026)", "Dual-Branch Multi-Modal (144D Invariant MLP + 128x128 RGB CNN) + WordBuffer + Dictionary / IndicTrans2 + Multi-Tier TTS", "Webcam RGB + MediaPipe Hands Landmarks (21 per hand) + 128x128 Crop", "26 ISL Letters (1-Hand & 2-Hand) -> 10 Regional Languages + Speech", "78.19% Top-1 Acc (83.13% with K/T override*) / 0.7349 Macro F1 (Held-Out Same-Signer)", "Live multi-signer accuracy pending; camera mirroring coordinate drop (-48.97%); 2-frame hysteresis evaluated on synthetic sequence. *K/T override possibly tuned on test data.")
     ]
 
@@ -141,10 +142,12 @@ def build_chapter2(doc: Document):
 
     add_bullet_p(
         doc,
-        "The MediaPipe Hands pipeline executes landmark tracking in 13.23 ms (empty frame) to 14.84 ms on Apple Silicon M2 (CPU) "
-        "as measured by src/benchmark_latency.py. The subsequent 144D spatial feature extraction and Dense MLP inference require < 3 ms. "
+        "Measured on Apple Silicon M2 (CPU) using src/benchmark_latency.py, empty frame pipeline processing runs at 13.23 ms median (75.3 FPS), "
+        "while active dual-hand alphabet decision (MediaPipe Hands tracking + 144D feature extraction + dual-hand MLP + decision fusion) "
+        "executes in 14.62 ms median / 14.84 ms mean (67.4 FPS inference throughput). The full end-to-end pipeline (including sensor ingestion, "
+        "OpenCV canvas drawing, and JPEG encoding) sustains 22.6 FPS (39.99 ms median / 44.16 ms mean) on active dual-hand frames. "
         "Decoupled asynchronous video streaming via Flask MJPEG and Server-Sent Events (SSE) guarantees that video presentation "
-        "and model inference do not block each other, sustaining 22.6 FPS on active dual-hand frames.",
+        "and client event dispatch do not block each other.",
         bold_prefix="Technical Feasibility: "
     )
 
