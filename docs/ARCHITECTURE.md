@@ -6,58 +6,61 @@ The system is engineered as an end-to-end multimodal perception and translation 
 
 ```text
                ┌───────────────────────────────┐
-               │  Web Camera / Video Stream    │
+               │  FaceTime HD / USB Camera     │
                └───────────────┬───────────────┘
                                │
                                ▼
                ┌───────────────────────────────┐
-               │     MediaPipe Holistic        │
-               │  (33 Pose + 468 Face Mesh +   │
-               │   21 Left Hand + 21 Right)    │
-               └───────────────┬───────────────┘
-                               │
-                               ▼
-               ┌───────────────────────────────┐
-               │ 1,662-Dim Coordinate Vector   │
+               │     MediaPipe Hands 3D        │
+               │   (21 3D Left + 21 3D Right)  │
                └───────────────┬───────────────┘
                                │
             ┌──────────────────┴──────────────────┐
-            │ (Mode: Word)                        │ (Mode: Alphabet)
             ▼                                     ▼
  ┌──────────────────────┐              ┌───────────────────────────┐
- │ 30-Frame FIFO Buffer │              │ Single-Frame Hand Vector  │
- └──────────┬───────────┘              │  (Left/Right Normalization)
-            ▼                          └─────────────┬─────────────┘
- ┌──────────────────────┐                            ▼
- │   Dual MoP-GRU       │              ┌───────────────────────────┐
- │  Inference Engine    │              │ 26-Class Dense Classifier │
- │ (13-Class / 29-Class)│              └─────────────┬─────────────┘
- └──────────┬───────────┘                            ▼
-            │                          ┌───────────────────────────┐
-            │                          │  WordBuffer State Machine │
-            │                          │ (Debounce, Space, Del)    │
-            │                          └─────────────┬─────────────┘
+ │ Geometric Coordinates│              │ Visual Appearance Crop    │
+ │ (63D/144D Landmark)  │              │ (128x128 RGB Image)       │
+ └──────────┬───────────┘              └─────────────┬─────────────┘
+            ▼                                        ▼
+ ┌──────────────────────┐              ┌───────────────────────────┐
+ │ Landmark MLP Model   │              │ RGB Visual CNN Model      │
+ │ (26-Class / 20-Class)│              │ (26-Class Sign Classifier)│
+ └──────────┬───────────┘              └─────────────┬─────────────┘
+            │                                        │
             └──────────────────┬─────────────────────┘
                                ▼
-                  ┌─────────────────────────┐
-                  │   English Token / Text  │
-                  └────────────┬────────────┘
+               ┌───────────────────────────────┐
+               │ Confidence-Aware Fusion Engine│
+               │ (Geometric Prior + Agreement) │
+               └───────────────┬───────────────┘
+                               ▼
+               ┌───────────────────────────────┐
+               │   WordBuffer State Machine    │
+               │   (Debounce 0.8s, Space, Edit)│
+               └───────────────┬───────────────┘
+                               │
+                               ▼
+               ┌───────────────────────────────┐
+               │ Continuous Learning Feedback  │
+               │ (Quality Filter & SQLite DB)  │
+               └───────────────┬───────────────┘
                                │
              ┌─────────────────┴─────────────────┐
              ▼                                   ▼
 ┌─────────────────────────┐         ┌─────────────────────────┐
 │ Multilingual Translator │         │   Text-to-Speech (TTS)  │
-│ (10 Regional Languages) │         │ (macOS say/pyttsx3/gTTS)│
+│ (10 Regional Languages) │         │ (Web Speech API / say)  │
 └────────────┬────────────┘         └────────────┬────────────┘
              │                                   │
              └─────────────────┬─────────────────┘
                                ▼
               ┌─────────────────────────────────┐
-              │  Flask Async Application Server │
+              │  Flask Local Desktop Backend    │
               │   • /video_feed (MJPEG Stream)  │
-              │   • /prediction_stream (SSE)    │
-              │   • REST API Controls           │
+              │   • /events (SSE Telemetry)     │
+              │   • Single-Instance Port 5001   │
               └────────────────┬────────────────┘
+                               │
                                ▼
               ┌─────────────────────────────────┐
               │    Responsive Web Frontend      │
@@ -69,45 +72,30 @@ The system is engineered as an end-to-end multimodal perception and translation 
 
 ## 2. Core Subsystems
 
-### A. Computer Vision & Landmark Extraction (`src/mediapipe_utils.py`)
-- Employs Google MediaPipe Holistic in a lightweight real-time configuration.
-- Extracts spatial coordinates across 543 distinct anatomical landmarks per frame:
-  - Pose landmarks: 33 points $\times$ 4 coordinates $(x, y, z, \text{visibility}) = 132$ features.
-  - Face mesh landmarks: 468 points $\times$ 3 coordinates $(x, y, z) = 1,404$ features.
-  - Left hand landmarks: 21 points $\times$ 3 coordinates $(x, y, z) = 63$ features.
-  - Right hand landmarks: 21 points $\times$ 3 coordinates $(x, y, z) = 63$ features.
-- Total feature vector: **1,662 floating-point values per frame**.
-- Zero landmarks are returned as zeros when hands or faces are out of frame.
+### A. Computer Vision & Landmark Perception (`src/inference_engine.py` & `src/mediapipe_utils.py`)
+- Employs Google MediaPipe Hands in a dedicated low-latency capture thread.
+- Extracts spatial coordinates across 21 anatomical landmarks per hand (42 total 3D points).
+- Computes normalized Euclidean coordinates relative to wrist and middle MCP hand scale.
 
-### B. Dynamic Word Recognition (`src/inference_engine.py`)
-- Maintains a 30-frame FIFO sliding window ($30 \times 1,662$) capturing ~1.0–1.2 seconds of movement.
-- **Dynamic Model Switching:**
-  - `mopgru_model.h5`: 13 foundational vocabulary signs with `labelencoder.pkl`.
-  - `mopgru_model_29class.h5`: 29 conversational vocabulary signs with `labelencoder_29class.pkl`.
-- Incorporates a confidence threshold (default 0.70) and consecutive-frame stability counter to eliminate prediction flicker.
+### B. Multi-Modal Decision Fusion (`src/fusion_engine.py`)
+- **Geometric Landmark Prior:** Fast evaluation on 63D single-hand and 144D dual-hand coordinate features.
+- **Visual RGB Appearance:** 128x128 cropped bounding box evaluated by a dedicated CNN classifier.
+- **Confidence-Aware Arbitration:** Dynamically arbitrates predictions between geometric topology and visual appearance, boosting confidence when both modalities agree.
 
-### C. Static Fingerspelling Recognition (`src/alphabet_engine.py`)
-- Classifies single-frame static hand shapes into letters A–Z using a 26-class Dense neural network (`alphabet_model_26class.h5`).
-- **Dual-Hand Support & Hand Gating:**
-  - Supports tracking both hands simultaneously.
-  - Classifies letters according to ISL standard reference:
-    - Single-handed letters: `C`, `L`, `O`, `U`, `V`
-    - Two-handed letters: `A`, `B`, `D`, `E`, `F`, `G`, `H`, `I`, `J`, `K`, `M`, `N`, `P`, `Q`, `R`, `S`, `T`, `W`, `X`, `Y`, `Z`
-  - Validates hand count and suppresses erroneous single-handed predictions when a two-handed gesture is required.
-- **WordBuffer State Machine:**
-  - Implements debounce timing and character cooldowns (default 1.2s between duplicate letters).
-  - Handles sentence composition with space insertion, character backspacing, and buffer clearing.
+### C. Alphabet Recognition & WordBuffer (`src/alphabet_engine.py`)
+- Classifies hand shapes into letters A–Z using production neural checkpoints (`alphabet_model_26class.h5` and `cnn_sign_model.h5`).
+- **Dual-Hand Support & Hand Gating:** Dispatches bimanual signs to the 144D dual-hand classifier (`best_val_model.h5`).
+- **WordBuffer State Machine:** Manages debounce cooldowns (0.8s), character latching, word commitments, backspaces, and sentence assembly.
 
-### D. Translation & Speech Synthesis (`src/translator.py` & `src/tts_engine.py`)
-- **Multilingual Translator:** Translates recognized English words/sentences into 9 regional Indian languages: Hindi (`hi`), Bengali (`bn`), Tamil (`ta`), Telugu (`te`), Marathi (`mr`), Gujarati (`gu`), Kannada (`kn`), Malayalam (`ml`), and Punjabi (`pa`), as well as English (`en`).
-- **Text-to-Speech Engine:** Multi-backend synthesizer prioritizing native low-latency macOS `say` subprocesses, falling back to `pyttsx3` and `gTTS`.
+### D. Multilingual Translation & Speech Synthesis (`src/translator.py` & `src/tts_engine.py`)
+- **Indic Translation:** Translates assembled English text into 10 regional Indian languages (Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati, Kannada, Malayalam, Punjabi, and English).
+- **Text-to-Speech Engine:** Leverages browser Web Speech API for native Indic voices, with offline macOS `say` execution fallback.
 
-### E. Web Server & Transport (`src/app.py`)
-- Multi-threaded Flask application serving:
-  - `/video_feed`: Real-time annotated MJPEG video stream with bounding boxes and landmark HUD.
-  - `/prediction_stream`: Server-Sent Events (SSE) streaming JSON tokens, probabilities, translations, and buffer states with sub-50ms latency.
-  - REST endpoints for switching modes, hot-swapping models, selecting target languages, and mutating the alphabet WordBuffer.
+### E. Continuous Learning & Privacy Subsystem (`src/feedback_learning/`)
+- User-driven explicit sign correction interface.
+- Multi-tier quality filtering and outlier rejection.
+- Secure pseudonymized session tokens (HMAC-SHA256) and atomic SQLite persistence (`data/feedback/feedback.db`).
 
-### F. Standalone Packaging (`packaging/`)
-- Packaged using PyInstaller for standalone macOS deployment without requiring external terminal or Python environments.
-- Self-contained launcher (`packaging/launcher.py`) coordinates background Flask server initialization and native browser opening.
+### F. Local Desktop Packaging (`packaging/`)
+- Native double-clickable macOS bundle (`ISL Translator.app`) and terminal launcher (`Launch ISL Translator.command`).
+- Single-instance safety mutex on port 5001 with health-check polling and automated browser launch.

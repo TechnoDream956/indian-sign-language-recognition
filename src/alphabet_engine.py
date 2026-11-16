@@ -353,6 +353,7 @@ class AlphabetEngine:
         self.raw_prediction: Optional[str] = None
         self.raw_confidence: float = 0.0
         self.stable_letter: Optional[str] = None
+        self.last_stable_letter: Optional[str] = None
         self.emitted_letter: Optional[str] = None
         self.state: str = "IDLE"
 
@@ -403,6 +404,7 @@ class AlphabetEngine:
         self.reset_debounce_state()
         self.word_buffer.clear_all()
         self.last_emitted_letter = None
+        self.last_stable_letter = None
         self.last_emitted_time = 0.0
         self.state = "IDLE"
 
@@ -723,6 +725,7 @@ class AlphabetEngine:
 
             if self.consecutive_count >= self.stability_frames:
                 self.stable_letter = self.consecutive_candidate
+                self.last_stable_letter = self.consecutive_candidate
                 time_since_last_emission = now - self.last_emitted_time
                 can_emit = False
 
@@ -802,6 +805,7 @@ class AlphabetEngine:
 
             if self.consecutive_count >= self.stability_frames:
                 self.stable_letter = self.consecutive_candidate
+                self.last_stable_letter = self.consecutive_candidate
                 time_since_last_emission = now - self.last_emitted_time
                 can_emit = False
                 if self.stable_letter == self.last_emitted_letter:
@@ -872,6 +876,10 @@ class AlphabetEngine:
             "raw_letter": self.raw_prediction,
             "raw_confidence": self.raw_confidence,
             "stable_letter": self.stable_letter,
+            "last_stable_letter": self.last_stable_letter,
+            "stability_progress": round(min(1.0, self.consecutive_count / max(1, self.stability_frames)), 2),
+            "consecutive_count": self.consecutive_count,
+            "stability_frames": self.stability_frames,
             "emitted_letter": self.emitted_letter,
             "emission_id": self.emission_counter,
             "state": self.state,

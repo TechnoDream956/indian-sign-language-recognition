@@ -1,89 +1,58 @@
-# Deployment Guide — Indian Sign Language Recognition & Translation
+# Deployment & Application Guide — Indian Sign Language Recognition & Translation
 
-This document explains the production deployment architecture for the **Indian Sign Language Recognition & Multilingual Voice Translator**.
-
----
-
-## 1. Architecture Overview
-
-Due to the continuous computer vision, MediaPipe hand landmark extraction, and TensorFlow neural network inference pipelines, the application is structured with a decoupled, high-performance architecture:
-
-```
-┌───────────────────────────────────────┐
-│           Vercel Frontend             │
-│   (Static Single Page Application)    │
-│  - Hosted on Vercel Edge Global CDN   │
-│  - Instant loading, zero server cost  │
-│  - Interactive HUD & Indic Translator │
-└──────────────────┬────────────────────┘
-                   │
-                   │ REST API / SSE / MJPEG Video Stream
-                   ▼
-┌───────────────────────────────────────┐
-│        Python Backend Container       │
-│  (Docker / Render / Railway / Local)  │
-│  - Flask REST & SSE Server (Port 5001)│
-│  - MediaPipe Hands Holistic Pipeline  │
-│  - Dual-Model Fusion (CNN + Landmark) │
-│  - Native TTS & Indic Translation     │
-└───────────────────────────────────────┘
-```
+This document explains the runtime deployment and packaging architecture for the **Indian Sign Language Recognition & Multilingual Voice Translator**.
 
 ---
 
-## 2. Deploying Frontend to Vercel (1-Click or CLI)
+## 1. Local Desktop Application (macOS Primary)
 
-### Method A: Vercel CLI (1-Step Command)
+The primary target platform is a self-contained local desktop application on macOS (Apple Silicon M1/M2/M3/M4 and Intel):
 
-Run from the project root:
+```
+┌────────────────────────────────────────────────────────┐
+│               ISL Translator.app                       │
+│     (macOS Native Application Bundle / .command)       │
+│  - Double-click launch with zero Terminal commands     │
+│  - Single-instance safety mutex (Port 5001 auto-bind)  │
+│  - Health-check polling with automatic browser launch  │
+└───────────────────────────┬────────────────────────────┘
+                            │
+                            │ Starts background process
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│              Local Flask & Neural Backend              │
+│  - MediaPipe Hands 3D Coordinate Perception            │
+│  - Multi-Modal Decision Fusion (MLP 63D + RGB CNN)     │
+│  - WordBuffer Debounce & Sentence Composition          │
+│  - Multilingual Translation & Native TTS Voice         │
+└────────────────────────────────────────────────────────┘
+```
+
+### Launch Methods:
+1. **`ISL Translator.app`**: Double-click directly in Finder.
+2. **`Launch ISL Translator.command`**: Double-click Terminal script with live logging.
+3. **`python packaging/launcher.py`**: Direct Python execution.
+
+---
+
+## 2. Docker Container Deployment
+
+For containerized server environments:
 
 ```bash
-vercel --prod
+# Build the container image
+docker build -t isl-translator:latest .
+
+# Run the container mapping port 5001
+docker run -d -p 5001:5001 --name isl-app isl-translator:latest
 ```
 
-When prompted:
-1. `Set up and deploy?` → **Y**
-2. `Which scope do you want to deploy to?` → Select your personal account / team.
-3. `Link to existing project?` → **N** (or select if updating an existing deployment).
-4. `What's your project's name?` → `indian-sign-language-translator`
-5. `In which directory is your code located?` → `./`
-
-The deployment will automatically detect `vercel.json` and serve the production assets from `public/`.
-
-### Method B: GitHub Vercel Integration
-
-1. Go to [https://vercel.com/new](https://vercel.com/new).
-2. Import your GitHub repository (`TechnoDream956/indian-sign-language-recognition`).
-3. Set **Root Directory** to `./` and **Output Directory** to `public`.
-4. Click **Deploy**.
+Health check endpoint: `http://localhost:5001/api/status`
 
 ---
 
-## 3. Deploying Python Backend (Docker / Render / Railway)
+## 3. Connecting Frontend to Custom Backend
 
-### Method A: Render.com (Recommended Free/Standard Tier)
-
-1. Fork or push this repository to GitHub.
-2. Sign in to [https://dashboard.render.com](https://dashboard.render.com).
-3. Click **New +** → **Blueprint** and select your repository (it will automatically read `render.yaml`).
-4. Alternatively, click **New +** → **Web Service** → select **Docker** runtime.
-5. Set:
-   - **Environment**: `Docker`
-   - **Port**: `5001`
-   - **Health Check Path**: `/api/status`
-6. Click **Create Web Service**. Render will build the container from `Dockerfile`.
-
-### Method B: Railway.app
-
-1. Go to [https://railway.app/new](https://railway.app/new).
-2. Choose **Deploy from GitHub repo**.
-3. Railway automatically detects the `Dockerfile` and deploys the container.
-4. Set environment variable `PORT=5001`.
-
----
-
-## 4. Connecting Frontend to Backend
-
-1. In the top-right header of the web application, click the **⚙️ Backend** button.
-2. Enter your backend server's URL (e.g. `https://isl-recognition-backend.onrender.com` or `http://localhost:5001`).
-3. The application will store the URL in local browser storage and reconnect all vision, speech, and translation streams automatically!
+1. In the top-right header of the web application, click the **⚙️ Settings** button.
+2. Enter your backend server's URL (e.g. `http://127.0.0.1:5001`).
+3. The application will store the URL in local browser storage and connect all vision, speech, and translation streams automatically!

@@ -5,13 +5,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/TechnoDream956/indian-sign-language-recognition/actions"><img src="https://img.shields.io/badge/Tests-118%20Passing-brightgreen?style=flat-square&logo=github-actions&logoColor=white" alt="Tests" /></a>
+  <a href="https://github.com/TechnoDream956/indian-sign-language-recognition/actions"><img src="https://img.shields.io/badge/Tests-235%20Passing-brightgreen?style=flat-square&logo=github-actions&logoColor=white" alt="Tests" /></a>
   <a href="https://www.python.org/downloads/release/python-31012/"><img src="https://img.shields.io/badge/Python-3.10-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.10" /></a>
   <a href="https://developers.google.com/mediapipe"><img src="https://img.shields.io/badge/MediaPipe-0.10.21-00C7B7?style=flat-square&logo=google&logoColor=white" alt="MediaPipe" /></a>
   <a href="https://www.tensorflow.org/"><img src="https://img.shields.io/badge/TensorFlow-2.16.2-FF6F00?style=flat-square&logo=tensorflow&logoColor=white" alt="TensorFlow" /></a>
   <a href="https://flask.palletsprojects.com/"><img src="https://img.shields.io/badge/Flask-3.1.3-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask" /></a>
-  <a href="https://vercel.com/"><img src="https://img.shields.io/badge/Frontend-Vercel-000000?style=flat-square&logo=vercel&logoColor=white" alt="Vercel" /></a>
-  <a href="https://render.com/"><img src="https://img.shields.io/badge/Backend-Render-46E3B7?style=flat-square&logo=render&logoColor=white" alt="Render" /></a>
+  <a href="ISL%20Translator.app"><img src="https://img.shields.io/badge/Desktop-macOS%20.app-000000?style=flat-square&logo=apple&logoColor=white" alt="Desktop App" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow?style=flat-square" alt="License: MIT" /></a>
 </p>
 
@@ -20,7 +19,7 @@
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
-- [Live Deployments](#-live-deployments)
+- [Desktop Application Execution](#-desktop-application-execution)
 - [System Architecture](#-system-architecture)
   - [Processing Pipeline](#processing-pipeline)
   - [Cloud Webcam Architecture](#cloud-webcam-architecture)
@@ -35,8 +34,8 @@
 - [Repository Structure](#-repository-structure)
 - [Installation & Local Setup](#-installation--local-setup)
 - [Production Deployment](#-production-deployment)
-  - [Frontend (Vercel)](#frontend-vercel)
-  - [Backend (Render)](#backend-render)
+  - [Local Desktop Architecture (Primary)](#local-desktop-architecture-primary)
+  - [Docker Containerization (Optional)](#docker-containerization-optional)
 - [API Reference](#-api-reference)
 - [Testing & Quality Assurance](#-testing--quality-assurance)
 - [Current System Limitations](#-current-system-limitations)
@@ -62,18 +61,19 @@ This repository provides an end-to-end, edge-deployable **Indian Sign Language A
 
 ---
 
-## 🌐 Live Deployments
+## 🖥️ Desktop Application Execution
 
-The project is deployed across a decoupled cloud architecture:
+The project is packaged as a **self-contained local desktop application** designed for macOS (Apple Silicon M1/M2/M3/M4 & Intel):
 
-| Component | Provider | Live URL | Status | Description |
-| :--- | :--- | :--- | :---: | :--- |
-| **Frontend Dashboard** | **Vercel** | [indian-sign-language-recognition-psi.vercel.app](https://indian-sign-language-recognition-psi.vercel.app) | `Active` | Static Single-Page Application (SPA) with real-time canvas overlays and Web Speech TTS. |
-| **Inference Backend** | **Render** | [isl-recognition-backend.onrender.com](https://isl-recognition-backend.onrender.com) | `Active` | Dockerized Flask server running MediaPipe, Keras models, Decision Fusion, and NLP translation APIs. |
-| **Local Development** | **Localhost** | `http://127.0.0.1:5001` | `Ready` | Native hardware webcam loop with sub-40ms end-to-end latency. |
+| Launch Mode | Target File | Description |
+| :--- | :--- | :--- |
+| **macOS Native App** | `ISL Translator.app` | **Double-click to start.** Automatically checks single-instance port, bootstraps Flask + ML engines, and opens default browser at `http://127.0.0.1:5001`. |
+| **macOS Terminal Script** | `Launch ISL Translator.command` | Double-click fallback that executes within Terminal with real-time logging. |
+| **Command-Line Launcher** | `python packaging/launcher.py` | Direct Python launcher with automatic health check polling and browser launch. |
+| **Development Server** | `./run_app.sh` or `python src/app.py` | Standard developer startup on port 5001. |
 
-> [!WARNING]
-> **Hosting Notice:** The backend runs on a Render free/standard container. If the application has been idle, the backend may require **30–50 seconds to complete cold-start initialization** on the first request. The frontend displays connection health and RTT telemetry directly in the viewport HUD.
+> [!TIP]
+> **Zero Cloud Lag:** Because the models and MediaPipe pipeline run natively on your MacBook CPU/GPU, there are **no cold-start delays, no network latency, and no cloud server timeouts**. The camera pipeline runs at a blistering 25–30 FPS with sub-35ms inference latency.
 
 ---
 
@@ -83,7 +83,7 @@ The project is deployed across a decoupled cloud architecture:
 
 ```mermaid
 flowchart TD
-    subgraph Client ["Client Browser (Vercel Edge SPA)"]
+    subgraph Client ["Client Browser Dashboard (Chrome / Safari / Edge)"]
         Cam["Webcam Input (640x480 @ 12-25 FPS)"]
         Canvas["HTML5 Canvas Overlay (21 Keypoints + Skeleton)"]
         Loop["Paced Frame Ingestion (RTT-Adaptive Chaining)"]
@@ -93,7 +93,7 @@ flowchart TD
         Speech["Client-Side Web Speech API (Indic TTS)"]
     end
 
-    subgraph Backend ["Python Inference Backend (Render Container / Local)"]
+    subgraph Backend ["Python Inference Backend (Local Flask Server / Port 5001)"]
         Ingest["POST /api/camera/frame"]
         MP["MediaPipe Hands Detector (21 3D Normalized Keypoints)"]
 
@@ -186,7 +186,7 @@ This platform uses a **Cloud Browser Webcam Ingestion Pattern**:
 - **Multi-Modal Decision Debugger:** Live panel showing independent landmark top-3 predictions, CNN predictions, and fused decisions.
 - **Safe Session Toggle:** Header button switches cleanly between "Start Camera" and "Stop Camera", disabling webcam tracks without terminating the backend server.
 - **System Settings Modal:**
-  - Configurable Backend URL (switches between Render cloud and local Flask).
+  - Configurable Backend URL (defaults to local host origin `http://127.0.0.1:5001` with custom server override support).
   - Live Latency Ping Test calling `/api/healthz`.
   - Video stream and skeleton canvas selfie mirroring toggle.
   - Detection confidence threshold slider (30% to 95%).
@@ -266,8 +266,8 @@ The application provides a responsive computer vision workspace organized into 7
 | **Frontend Framework** | **HTML5 / CSS3 / ES6+** | Native | Zero-dependency, responsive dark workspace with CSS Grid and Flexbox. |
 | **Canvas Rendering** | **HTML5 Canvas API** | Native | Sub-frame landmark skeletal bone rendering overlaid on live video. |
 | **Voice Synthesis** | **Web Speech API** | Native | Client-side speech synthesis targeting installed Indic OS voices. |
-| **Frontend Hosting** | **Vercel** | Edge | Static SPA hosting with automatic API rewrites to the cloud backend. |
-| **Backend Hosting** | **Render** | Docker | Containerized hosting for the Python ML inference server and endpoints. |
+| **Desktop Packaging** | **macOS Bundle (`.app`)** | Native | Self-contained double-clickable desktop application with single-instance lifecycle management. |
+| **Containerization** | **Docker** | Multi-Arch | Optional containerized packaging for headless server and isolated testing environments. |
 
 ---
 
@@ -283,7 +283,7 @@ Indian-Sign-Language-Recognition/
 │   ├── ARCHITECTURE.md              # Detailed pipeline data-flow specifications
 │   ├── CODEBASE_GUIDE.md            # Module-by-module implementation walkthrough
 │   ├── DATASETS.md                  # Dataset provenance, annotations, and schemas
-│   ├── DEPLOYMENT.md                # Cloud deployment guides for Vercel and Render
+│   ├── DEPLOYMENT.md                # Deployment guides for desktop, Docker, and headless server
 │   ├── INSTALLATION.md              # Extended environment configuration guide
 │   ├── PRESENTATION_GUIDE.md        # Academic demonstration notes
 │   ├── PROJECT_REPORT.md            # Comprehensive project overview
@@ -298,11 +298,11 @@ Indian-Sign-Language-Recognition/
 │   └── experimental/                # Research checkpoints (Phase 5A, 5B.1, 5B.2)
 │       ├── dual_hand_label_map_21class.json
 │       └── phase5b2_prompt23_class_k/ # Dual-hand 144D ablation models
-├── public/                          # Static SPA frontend deployed to Vercel
-│   ├── index.html                   # Workspace UI with canvas overlays and modals
-│   ├── style.css                    # Dark theme styling, glassmorphism, responsive grid
-│   ├── app.js                       # Frontend client logic, Web Speech API, paced streaming
-│   └── static/                      # Static asset mirror for Vercel CDN distribution
+├── packaging/                       # Desktop application packaging and launchers
+│   ├── ISL_Translator.spec          # PyInstaller standalone build specification
+│   ├── build_app.sh                 # macOS .app build and hash verification script
+│   ├── launcher.py                  # Single-instance lifecycle and health bootstrap
+│   └── mac_app_launcher.sh          # Native application bundle executable wrapper
 ├── src/                             # Core Python backend application source code
 │   ├── alphabet_engine.py           # 26-class Landmark inference and WordBuffer state machine
 │   ├── app.py                       # Flask application, REST endpoints, and SSE streams
@@ -315,7 +315,7 @@ Indian-Sign-Language-Recognition/
 │   ├── tts_engine.py                # Native macOS say / afplay speech synthesis fallback
 │   ├── static/                      # Local Flask server static mirror (app.js, style.css)
 │   └── templates/                   # Local Flask server Jinja2 templates (index.html)
-├── tests/                           # Comprehensive automated test suite (118 tests)
+├── tests/                           # Comprehensive automated test suite (235 tests across 18 suites)
 │   ├── test_alphabet_26class_matrix.py
 │   ├── test_alphabet_accuracy.py
 │   ├── test_alphabet_engine.py
@@ -327,16 +327,15 @@ Indian-Sign-Language-Recognition/
 │   ├── test_flask_alphabet_integration.py
 │   └── test_paths_helper.py
 ├── .gitignore                       # Git exclusion rules
-├── .vercelignore                    # Excludes Python, ML models, and datasets from Vercel
-├── Dockerfile                       # Container definition for Render deployment
+├── ISL Translator.app/              # Native double-clickable macOS application bundle
+├── Launch ISL Translator.command    # Double-clickable macOS Terminal launch script
+├── Dockerfile                       # Container definition for containerized deployments
 ├── LICENSE                          # MIT License (Copyright 2026 Barathi Subramanian)
 ├── README.md                        # Master project documentation
-├── render.yaml                      # Render cloud orchestration specification
 ├── requirements.txt                 # Pinned Python dependencies (Python 3.10)
 ├── run_app.sh                       # Local development startup launcher
 ├── test_hin.wav                     # Audio synthesis verification sample
-├── THIRD_PARTY_NOTICES.md           # Open-source attributions and licenses
-└── vercel.json                      # Vercel static routing and backend API rewrites
+└── THIRD_PARTY_NOTICES.md           # Open-source attributions and licenses
 ```
 
 ---
@@ -348,7 +347,18 @@ Indian-Sign-Language-Recognition/
 - **Python Version:** Python `3.10.x` (Recommended: `3.10.12` to `3.10.21`).
 - **Webcam:** Integrated FaceTime HD Camera or standard external USB/UVC camera.
 
-### Step-by-Step Setup
+### Quick Start — 1-Click Double-Click Desktop Launch (macOS)
+
+1. Open Finder to the repository directory.
+2. Double-click **`ISL Translator.app`** (or **`Launch ISL Translator.command`**).
+3. The launcher automatically:
+   - Verifies all neural models and frontend assets.
+   - Allocates port 5001 (or next available).
+   - Starts the inference background server.
+   - Opens your default web browser directly to `http://127.0.0.1:5001`.
+   - Releases camera hardware and shuts down cleanly when you click **Quit Application** or close the window.
+
+### Command-Line Setup (Developers)
 
 ```bash
 # 1. Clone the repository
@@ -362,22 +372,14 @@ git checkout exp-dataset-intelligence
 python3.10 -m venv venv
 
 # 4. Activate the virtual environment
-# On macOS / Linux:
 source venv/bin/activate
 
-# 5. Upgrade pip and packaging dependencies
+# 5. Install pinned dependencies
 pip install --upgrade pip setuptools wheel
-
-# 6. Install pinned dependencies
 pip install -r requirements.txt
 
-# 7. Launch the application
-./run_app.sh
-```
-
-Alternatively, you can launch the Flask application directly:
-```bash
-PORT=5001 python src/app.py
+# 6. Launch the desktop application
+python packaging/launcher.py
 ```
 
 ### Accessing the Local Application
@@ -400,26 +402,21 @@ http://127.0.0.1:5001
 
 ## 🚀 Production Deployment
 
-The production architecture decouples the static frontend from the heavy ML inference backend:
+The application is architected primarily as a **self-contained local desktop application** with optional Docker containerization:
 
-### Frontend (Vercel)
-- **Deployment Model:** Pure Static Single-Page Application (SPA) hosted on Vercel's global edge network.
-- **Output Directory:** `public/`
-- **Exclusion Rules (`.vercelignore`):** Strictly excludes Python files, virtual environments, heavy models (`*.h5`, `*.keras`), training data, and tests, keeping the deployable artifact well within Vercel's 500 MB limit.
-- **API Rewrites (`vercel.json`):**
-  - Requests matching `/api/:match*` are reverse-proxied to `https://isl-recognition-backend.onrender.com/api/:match*`.
-  - Requests matching `/events` are reverse-proxied for SSE telemetry.
-  - Allows CORS headers (`Access-Control-Allow-Origin: *`) across all routes.
+### Local Desktop Architecture (Primary)
+- **Runtime Environment:** Native Python 3.10 virtual environment running on local hardware (macOS Apple Silicon M1/M2/M3/M4 or Intel, Linux, Windows).
+- **Computer Vision Pipeline:** Direct low-latency hardware video capture via OpenCV and MediaPipe Hands running locally on CPU.
+- **Single-Instance Safety:** Built-in mutex and port availability checks prevent duplicate instances or camera resource conflicts.
+- **Frontend Delivery:** High-performance local Flask server serving Jinja2 templates and vanilla JavaScript with real-time SSE streaming.
 
-### Backend (Render)
-- **Deployment Model:** Dockerized Python 3.10 web service defined in `Dockerfile` and `render.yaml`.
+### Docker Containerization (Optional)
+- **Deployment Model:** Containerized Python 3.10 web service defined in `Dockerfile`.
 - **Environment Variables:**
   - `PORT=5001`
   - `HOST=0.0.0.0`
   - `PYTHONUNBUFFERED=1`
-  - `RENDER=true` (Automatically triggers headless cloud webcam mode)
 - **Health Check Path:** `/api/status` or `/api/healthz`
-- **Security & Privacy:** Frame streaming over the internet strictly requires **HTTPS** on remote hosts to satisfy browser `navigator.mediaDevices` security policies.
 
 ---
 
