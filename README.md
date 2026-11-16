@@ -27,9 +27,45 @@
 
 ---
 
+## 🏛️ Upstream Work and Our Contributions
+
+This repository originated as a fork of the research repository by **Barathi Subramanian et al.** ([barathi-1993/Indian-Sign-Language-Recognition](https://github.com/barathi-1993/Indian-Sign-Language-Recognition)), corresponding to the foundational research paper *"An integrated mediapipe-optimized GRU model for Indian sign language recognition"* (*Scientific Reports*, 2022). In strict accordance with the MIT License, the original copyright notice is preserved in [`LICENSE`](LICENSE). Below is the factual demarcation between inherited upstream work and our team's engineering contributions:
+
+### 1. Inherited from Upstream (Barathi Subramanian et al.)
+- **Dynamic Word-Level Sequence Concept:** The foundational paradigm of extracting skeletal landmarks using MediaPipe and classifying 30-frame temporal sequences via GRU architectures (`legacy/mopgru_cell.py`, `legacy/collect_keypoints.py`, `legacy/preprocess_keypoints.py`, `legacy/realtime_inference.py`, `legacy/train_word_model.py`).
+- **Landmark Helper Scripts:** Base landmark drawing helpers in `src/mediapipe_utils.py`.
+- **Pretrained Word Checkpoints:** Original isolated word models (`mopgru_model.h5`, `actionGRU.h5`) archived in `reserve/old_models/`.
+
+### 2. Built New by Our Team (Bennett University CSET312)
+- **Alphabet Fingerspelling Pipeline (A–Z):** Complete paradigm shift from closed-vocabulary word gestures to open-vocabulary combinatorial fingerspelling:
+  - 26-class single-hand MLP model (`models/alphabet_model_26class.h5`, 63D invariant input).
+  - 20-class dual-hand bimanual spatial MLP model (`DualHandEngine`, 144D geometric invariant features in `src/dual_hand_features.py`).
+  - RGB visual appearance CNN model (`src/cnn_engine.py`, 128x128x3 Conv2D).
+  - Multi-modal decision fusion engine (`src/fusion_engine.py`) with confidence arbitration and agreement gating.
+- **Temporal Debouncing & Word Formation:** Intelligent WordBuffer state machine (`src/word_buffer.py`) with 1.2s dynamic cooldown, 5-frame stability voting, backspace, and clear gestures.
+- **Multilingual Translation & Multi-Tier Speech:**
+  - 10-language Indic translation engine (`src/translator.py`) with local dictionary mapping and fallback.
+  - 4-tier speech fallback engine (`src/tts_engine.py`) spanning pyttsx3, Edge-TTS, gTTS, and browser Web Speech API.
+  - Optional neural machine translation (IndicTrans2 ONNX int8) and neural speech synthesis (Meta MMS-TTS VITS) in `src/language_services/`.
+- **Engineering Diagnostics & Safety Hardening:**
+  - Empirical diagnosis and remediation of the camera selfie mirroring coordinate inversion (-48.97% drop).
+  - 2-frame temporal hysteresis filter mitigating intermittent bimanual occlusion (-85.7% flapping on synthetic sequence).
+  - Data leakage and provenance audit suite (`tools/audit/leakage_audit.py`, `src/evaluate.py`, `src/benchmark_latency.py`).
+- **Software Architecture, Desktop Packaging & Testing:**
+  - Full-stack Flask application (`src/app.py`), HTML5 responsive dashboard, and Server-Sent Events (SSE) telemetry.
+  - Self-contained macOS desktop bundle (`ISL Translator.app`, `packaging/mac_app_launcher.sh`) and Docker containerization (`Dockerfile`).
+  - Automated test suite comprising 245 unit, regression, and integration tests (`tests/`).
+
+### 3. Modified by Our Team
+- Re-architected `src/app.py`, `src/inference_engine.py`, and `src/evaluate.py` from prototype scripts into an asynchronous, modular inference pipeline.
+- Re-organized legacy word-level prototypes into `legacy/` while ensuring all active models and pipelines reside cleanly in `src/`.
+
+---
+
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
+- [Upstream Work and Our Contributions](#-upstream-work-and-our-contributions)
 - [Desktop Application Execution](#-desktop-application-execution)
 - [System Architecture](#-system-architecture)
 - [Key Features](#-key-features)

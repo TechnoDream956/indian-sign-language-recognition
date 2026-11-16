@@ -3,15 +3,9 @@
 **Document:** `docs/report/ISL_Alphabet_Recognition_Project_Report.docx`  
 **Status:** Audited by automated report builder.  
 
-### Verification Verdict: ZERO UNRESOLVED PLACEHOLDERS
+### Found 2 Yellow-Highlighted Placeholders
 
-All required sections, team names, enrollment numbers, faculty mentor credentials, reconciled benchmark metrics, failure forensic findings, and verified IEEE citations have been populated with 100% verified repository data.
-
-| Status | Category | Details |
-| :---: | :--- | :--- |
-| **PASS** | Title & Header | 'REAL-TIME INDIAN SIGN LANGUAGE ALPHABET RECOGNITION WITH MULTILINGUAL TRANSLATION AND SPEECH OUTPUT' |
-| **PASS** | Team Members | Arpit Sehrawat, Sachin Sharma, Abhu Rai, Yash Upadhyay |
-| **PASS** | Faculty Mentor | Dr. Reshu Chaudhary, School of CSET, Bennett University |
-| **PASS** | Benchmark Metrics | Reconciled held-out benchmark (243 same-signer @ 78.19% / 83.13% K/T override, full 252 @ 75.79%) |
-| **PASS** | Citations | 10 verified peer-reviewed publications and preprints |
-| **PASS** | Design Diagrams | Figures 1–10 embedded in high resolution (300 DPI) |
+| Item # | Document Location | Context Preview | Placeholder Content |
+| :---: | :--- | :--- | :--- |
+| 1 | Paragraph 212 | Note on Interface Representation: The graphic below depicts the simulated UI layout mockup.  [TODO: Capture and insert l | `[TODO: Capture and insert live webcam screenshot with novel signer on physical test machine]` |
+| 2 | Paragraph 214 | Figure : User Interface Architecture Layout Mockup (Live Video Overlay and Multilingual Buffer) [TODO: Replace interface | `[TODO: Replace interface layout mockup with verified live hardware webcam screenshot]` |

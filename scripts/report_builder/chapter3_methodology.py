@@ -6,7 +6,8 @@ from docx import Document
 from docx.shared import Pt
 from .xml_helpers import (
     add_heading_1, add_heading_2, add_heading_3, add_body_p, add_bullet_p,
-    add_table_caption, add_figure_caption, insert_image_centered, format_academic_table
+    add_table_caption, add_figure_caption, insert_image_centered, format_academic_table,
+    add_todo_placeholder
 )
 
 FIGURES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../docs/report/figures"))
@@ -21,7 +22,7 @@ def build_chapter3(doc: Document):
     add_body_p(
         doc,
         "This chapter presents the engineering methodology, mathematical modeling, software architecture, and empirical "
-        "forensic evaluation of the proposed Indian Sign Language Recognition & Translation Platform. The methodology "
+        "evaluation of the proposed Indian Sign Language Recognition & Translation Platform. The methodology "
         "is structured into six logical subsections: system overview, user personas, end-to-end processing workflow, "
         "formal design diagrams (Use-Case, Class, ER, Sequence, DFD), user interface engineering, and system implementation "
         "comprising complete algorithms, annotated source code excerpts, and comprehensive ablation results."
@@ -151,20 +152,27 @@ def build_chapter3(doc: Document):
 
     # 3.5 User Interface
     add_heading_2(doc, "3.5. User Interface")
-    add_heading_3(doc, "3.5.1. User Description and Mockup")
+    add_heading_3(doc, "3.5.1. User Description and Interface Mockup")
     add_body_p(
         doc,
         "The user interface is engineered as a responsive, modern web application styled in a clean Midnight Teal theme "
         "utilizing semantic HTML5, Vanilla CSS custom properties, and native ES6 JavaScript without heavyweight frontend framework overhead. "
-        "As depicted in Figure 9, the interface is organized into a cohesive dual-pane layout:\n\n"
+        "As depicted in Figure 9, the interface is organized into a cohesive dual-pane telemetry layout:\n\n"
         "1. Visual Perception Canvas (Left): Displays the 640x480 MJPEG video feed overlaid with real-time MediaPipe skeletal landmarks, "
         "color-coded bounding boxes, an active prediction badge ('W'), and a dynamic confidence progress bar indicating recognition stability.\n\n"
         "2. Linguistic & Acoustic Control Center (Right): Features an assembled WordBuffer text pane showing transcribed characters, "
-        "hands-free action buttons (Space, Backspace, Clear), a target language selector (supporting 8 Indian languages), "
-        "a neural translation panel displaying regional script, and an integrated HTML5 audio player for synthesizing neural speech."
+        "hands-free action buttons (Space, Backspace, Clear), a target language selector (supporting 10 regional Indian languages), "
+        "a translation panel displaying regional script, and an integrated audio player for synthesizing speech."
     )
+    p_mockup_note = add_body_p(
+        doc,
+        "Note on Interface Representation: The graphic below depicts the simulated UI layout mockup. "
+    )
+    add_todo_placeholder(p_mockup_note, "Capture and insert live webcam screenshot with novel signer on physical test machine")
+
     insert_image_centered(doc, os.path.join(FIGURES_DIR, "fig_ui_screenshot.png"), width_inches=6.2)
-    add_figure_caption(doc, 9, "Real-Time User Interface with Live Video Overlay and Multilingual Buffer")
+    p_caption9 = add_figure_caption(doc, 9, "User Interface Architecture Layout Mockup (Live Video Overlay and Multilingual Buffer)")
+    add_todo_placeholder(p_caption9, "Replace interface layout mockup with verified live hardware webcam screenshot")
 
     # 3.6 System Implementation
     add_heading_2(doc, "3.6. System Implementation")

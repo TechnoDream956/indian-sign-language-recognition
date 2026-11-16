@@ -82,6 +82,22 @@ def build_chapter2(doc: Document):
 
     add_body_p(
         doc,
+        "Upstream Work and Project Contributions: This repository originated as a research fork of the MoP-GRU implementation "
+        "by Barathi Subramanian et al. (2022). In accordance with the MIT License, our work preserves the original copyright notice. "
+        "From the upstream repository, we inherited the dynamic sequence modeling concept and baseline landmark utilities "
+        "(preserved in legacy/mopgru_cell.py, legacy/collect_keypoints.py, legacy/preprocess_keypoints.py, legacy/realtime_inference.py, "
+        "and legacy/train_word_model.py, with pretrained models archived in reserve/old_models/). "
+        "Our team's novel contributions encompass: (1) shifting from closed-set dynamic word gestures to the complete 26-letter "
+        "combinatorial ISL alphabet, comprising a 26-class single-hand MLP (63D) and a 20-class dual-hand bimanual spatial MLP (144D); "
+        "(2) training and integrating a visual appearance CNN (128x128x3) and confidence-aware decision fusion engine; "
+        "(3) designing a temporal WordBuffer state machine with 1.2s debouncing and hands-free text manipulation; "
+        "(4) engineering a multi-tier speech fallback engine (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API) and 10-language Indic translation; "
+        "(5) diagnosing and fixing camera selfie mirroring (-48.97% drop) and 2-frame occlusion hysteresis; and "
+        "(6) developing a modern desktop application (.app), Docker containerization, and an automated 245-test suite."
+    )
+
+    add_body_p(
+        doc,
         "In a comprehensive comparative study, Adaloglou et al. (2022) evaluated deep learning-based SLR across "
         "RGB, optical flow, and skeletal modalities. Their findings confirmed that while 3D Convolutional Networks (such as I3D) "
         "capture fine-grained appearance, they suffer from extreme computational complexity (>100 GFLOPs), precluding real-time "

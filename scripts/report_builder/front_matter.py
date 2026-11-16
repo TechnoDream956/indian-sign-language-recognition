@@ -211,7 +211,7 @@ def build_front_matter(doc: Document):
         ("3.4.2. Class Diagrams", "15", "toc 3"),
         ("3.4.3. ER Diagrams", "17", "toc 3"),
         ("3.5. User Interface", "18", "toc 2"),
-        ("3.5.1. User Description and Mockup", "18", "toc 3"),
+        ("3.5.1. User Description and Interface Mockup", "18", "toc 3"),
         ("3.6. System Implementation", "20", "toc 2"),
         ("3.6.1. Algorithms/ Pseudo Code", "20", "toc 3"),
         ("3.6.2. Source Code with Documentation", "23", "toc 3"),
