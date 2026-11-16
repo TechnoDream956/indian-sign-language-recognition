@@ -83,11 +83,11 @@ flowchart TD
    - Extracts 21 3D landmarks per hand using Google MediaPipe Hands.
    - Calculates scale-invariant coordinates normalized by wrist-to-MCP distance.
    - Automatically sorts bilateral hands (left/right) to eliminate operator positioning drift.
+   - 2-frame hysteresis buffer in `AlphabetEngine` prevents hand-count flapping during occlusion signs (tested on synthetic 50-frame dropout sequence).
 
 2. **Temporal WordBuffer State Machine (`src/alphabet_engine.py`):**
-   - Applies a 1.2 s stability confirmation threshold before emitting a recognized character.
-   - 2-frame hysteresis buffer prevents hand-count flapping during occlusion signs (B, D, P).
-   - Provides hands-free word assembly, space injection, backspace deletion, and buffer reset.
+   - Applies a 1.2 s stability confirmation threshold and 5-frame persistence before emitting a recognized character.
+   - Provides hands-free word assembly, space injection, backspace deletion, and buffer reset (verified in `tests/test_alphabet_engine.py`).
 
 3. **Multilingual Translation & Multi-Tier Audio (`src/translator.py`, `src/tts_engine.py`):**
    - Sub-5 ms instant dictionary translation for common greeting and emergency phrases (dictionary-based translations for a limited vocabulary, not reviewed by native speakers).

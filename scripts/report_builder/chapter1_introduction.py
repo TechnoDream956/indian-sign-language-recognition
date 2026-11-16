@@ -51,7 +51,7 @@ def build_chapter1(doc: Document):
         doc,
         "This project bridges this assistive and computational gap by engineering an edge-deployable, "
         "real-time Indian Sign Language alphabet recognition and translation platform. The system operates locally on "
-        "consumer hardware (such as Apple Silicon or Intel-based laptops) at frame rates of approximately 22.6 FPS on active "
+        "consumer hardware (such as Apple Silicon or Intel-based laptops) at frame rates of approximately 23.4 FPS on active "
         "dual-hand frames without requiring paid cloud APIs. By fusing 3D kinematic landmarks extracted via Google MediaPipe Hands "
         "(21 3D landmarks per hand) with an appearance-based Convolutional Neural Network (CNN, 128x128x3), the platform provides multi-modal perception. "
         "The system advances beyond raw character output by integrating a temporal WordBuffer state machine that "

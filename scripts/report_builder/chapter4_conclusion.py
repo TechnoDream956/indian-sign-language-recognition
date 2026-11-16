@@ -51,12 +51,12 @@ def build_chapter4(doc: Document):
         table6.rows[0].cells[idx].text = h
 
     goals_eval_data = [
-        ("G-01", "Kinematic Perception", "Partly Met", "MediaPipe Hands extracts 21 3D landmarks per hand. Measured full pipeline sustained throughput is 22.6 FPS (39.99 ms median / 44.16 ms mean on CPU on active dual-hand frames). While landmark inference itself is fast (14.62 ms median for AlphabetEngine decision), full frame processing exceeds the 20 ms target due to camera ingestion, OpenCV drawing, and JPEG encoding."),
-        ("G-02", "Alphabet Recognition", "Met", "Dual-hand 144D baseline achieves 78.19% Top-1 accuracy [72.43%, 83.13%] on held-out same-signer test partition (N=243) and 77.16% on deduplicated partition (N=232); single-hand model achieves 75.93% on N=536 held-out test partition. Both exceed the 75% target."),
+        ("G-01", "Kinematic Perception", "Partly Met", "MediaPipe Hands extracts 21 3D landmarks per hand. Measured full pipeline sustained throughput is 23.4 FPS (43.18 ms median / 42.68 ms mean on CPU on active dual-hand frames; 74.4 FPS / 13.14 ms on empty frames). While landmark inference itself is fast (16.90 ms median for AlphabetEngine decision), full frame processing exceeds the 20 ms target due to camera ingestion, OpenCV drawing, and JPEG encoding. Hand-count hysteresis buffer (2 frames) in AlphabetEngine mitigates occlusion drops (85.7% flicker reduction on synthetic 50-frame dropout test sequence)."),
+        ("G-02", "Alphabet Recognition", "Met on point estimate", "Dual-hand 144D baseline achieves 78.19% Top-1 accuracy [72.43%, 83.13%] on held-out same-signer test partition (N=243) and 77.16% on deduplicated partition (N=232). Single-hand 63D baseline achieves 75.93% on held-out partition (N=536), but its 95% bootstrap CI is [72.20%, 79.66%], which includes values below 75%; near-duplicate and signer-overlap audits were not performed on the 536-sample single-hand partition due to unpreserved training landmarks."),
         ("G-03", "Decision Fusion & Gating", "Partly Met", "Multi-modal decision fusion is implemented in src/fusion_engine.py with code-aligned weights (0.65 geometry, 0.35 CNN, +0.10 agreement bonus, 0.50 threshold). However, clean fused accuracy (78.19%) equals the geometry branch alone and is below CNN alone (82.72%) on the held-out test set, demonstrating no empirical accuracy gain offline."),
-        ("G-04", "Temporal Smoothing", "Met", "WordBuffer state machine in src/sentence_decoder.py implements 1.2 s debouncing and 5-frame stability confirmation. Reduced hand-count flapping by 85.7% (from 7 switches to 1) on a synthetic 50-frame dropout test sequence."),
-        ("G-05", "Multilingual Translation", "Met", "Dictionary-based translations for a limited vocabulary (not reviewed by native speakers) in src/translator.py translates text into 10 regional Indian languages in < 0.01 ms (< 5 ms target) with zero cloud dependency for listed vocabulary; optional IndicTrans2 module implemented in src/language_services."),
-        ("G-06", "Speech Output", "Met", "Multi-tier speech engine in src/tts_engine.py provides functional vocalization across all 10 languages (macOS say, pyttsx3, gTTS, Web Speech API) with sub-second dispatch; optional Meta MMS-TTS module implemented in src/language_services.")
+        ("G-04", "Temporal Smoothing", "Met", "WordBuffer state machine in src/alphabet_engine.py implements hands-free word assembly, character commits, backspaces, and space insertion, verified in tests/test_alphabet_engine.py with 1.2 s debounce cooldown and 5-frame stability confirmation thresholds."),
+        ("G-05", "Multilingual Translation", "Met", "Dictionary-based translations for a limited vocabulary (not reviewed by native speakers) in src/translator.py translates text into 10 regional Indian languages in < 0.01 ms (< 5 ms target) with zero cloud dependency for listed vocabulary; optional IndicTrans2 module implemented in src/language_services/."),
+        ("G-06", "Speech Output", "Partly Met", "Multi-tier speech engine implemented in src/tts_engine.py (macOS say -> pyttsx3 -> gTTS -> browser Web Speech API) and unit-tested across languages; optional Meta MMS-TTS module implemented in src/language_services/. However: (1) time-to-first-audio latency to physical speakers was not measured; (2) audible pronunciation correctness was not evaluated by human listening checks; and (3) Gujarati, Punjabi, and Malayalam lack native offline OS voices on standard systems, falling back to online gTTS or browser speech synthesis.")
     ]
 
     for r_idx, row in enumerate(goals_eval_data, start=1):
@@ -78,7 +78,7 @@ def build_chapter4(doc: Document):
     add_bullet_p(
         doc,
         "A multi-modal perception architecture that extracts 3D skeletal landmarks via MediaPipe Hands (21 per hand) and cropped 128x128x3 "
-        "RGB appearance regions at approximately 22.6 FPS on active dual-hand frames. Includes a dynamic hand-presence router dispatching to single-hand 63D MLPs or "
+        "RGB appearance regions at approximately 23.4 FPS on active dual-hand frames (74.4 FPS on empty frames). Includes a dynamic hand-presence router dispatching to single-hand 63D MLPs or "
         "dual-hand 144D bilateral invariant MLPs.",
         bold_prefix="Multi-Modal Dual-Branch Vision Pipeline: "
     )
@@ -86,7 +86,7 @@ def build_chapter4(doc: Document):
     add_bullet_p(
         doc,
         "A confidence-aware fusion engine that synthesizes geometric and appearance probability vectors (W_geom=0.65, W_cnn=0.35) "
-        "with a +0.10 agreement bonus, coupled with a WordBuffer state machine featuring 1.2 s debouncing, 5-frame stability confirmation, "
+        "with a +0.10 agreement bonus, coupled with a WordBuffer state machine in src/alphabet_engine.py featuring 1.2 s debouncing, 5-frame stability confirmation, "
         "and hands-free space, backspace, and clear controls.",
         bold_prefix="Confidence Fusion & WordBuffer Debouncing: "
     )

@@ -519,11 +519,11 @@ def build_chapter3(doc: Document):
     add_body_p(
         doc,
         "To measure edge performance, latency and resource profiling was conducted on Apple Silicon M2 (CPU) "
-        "using src/benchmark_latency.py. As detailed in Table 5, the full end-to-end vision pipeline (including camera ingestion, "
+        "using src/benchmark_latency.py (committed run: docs/benchmarks/latency_2026-11-16.txt). As detailed in Table 5, the full end-to-end vision pipeline (including camera ingestion, "
         "MediaPipe Hands tracking, coordinate normalization, dual-hand MLP inference, CNN crop classification, decision fusion, "
-        "and OpenCV rendering) achieves an average throughput of 22.6 FPS (44.16 ms mean latency, 39.99 ms median) on active dual-hand frames, "
-        "enabling responsive real-time interaction. Default translation uses instantaneous local dictionary mapping (0.001 ms), while "
-        "IndicTrans2 and Meta MMS-TTS are implemented in src/language_services as optional offline neural extensions."
+        "and OpenCV rendering) achieves a sustained throughput of 23.4 FPS (42.68 ms mean latency, 43.18 ms median) on active dual-hand frames, "
+        "enabling responsive real-time interaction. Figures vary by a few percent between runs; measured on Apple M2, CPU only. Default translation uses instantaneous local dictionary mapping (< 0.01 ms), while "
+        "IndicTrans2 and Meta MMS-TTS are implemented in src/language_services/ as optional offline neural modules."
     )
 
     add_table_caption(doc, 5, "Measured Hardware Latency Benchmarks on Apple Silicon M2 (CPU)")
@@ -533,13 +533,13 @@ def build_chapter3(doc: Document):
         table5.rows[0].cells[idx].text = h
 
     table5_data = [
-        ("Full Pipeline (Active Dual-Hand)", "InferenceEngine.process_frame (CPU)", "39.99 ms", "44.16 ms", "22.6 FPS"),
-        ("Full Pipeline (Empty Frame)", "InferenceEngine.process_frame (CPU)", "13.23 ms", "13.28 ms", "75.3 FPS"),
-        ("AlphabetEngine Dual-Hand Decision", "MediaPipe Hands + 144D MLP + Fusion", "14.62 ms", "14.84 ms", "67.4 FPS"),
-        ("Visual CNN Engine (128x128x3)", "128x128x3 Crop + Conv2D (Keras)", "8.91 ms", "9.91 ms", "100.9 FPS"),
-        ("Dual-Hand Landmark Engine", "144D Features + MLP (20 classes)", "2.91 ms", "2.91 ms", "343.1 FPS"),
-        ("Single-Hand Baseline MLP", "63D Invariant Features + MLP (26 classes)", "1.81 ms", "1.86 ms", "538.5 FPS"),
-        ("Multi-Modal Decision Fusion", "Confidence Arbitration (Python)", "< 0.01 ms", "< 0.01 ms", "> 600,000 FPS")
+        ("Full Pipeline (Active Dual-Hand)", "InferenceEngine.process_frame (CPU)", "43.18 ms", "42.68 ms", "23.4 FPS"),
+        ("Full Pipeline (Empty Frame)", "InferenceEngine.process_frame (CPU)", "13.14 ms", "13.45 ms", "74.4 FPS"),
+        ("AlphabetEngine Dual-Hand Decision", "MediaPipe Hands + 144D MLP + Fusion", "16.90 ms", "17.31 ms", "57.8 FPS"),
+        ("Visual CNN Engine (128x128x3)", "128x128x3 Crop + Conv2D (Keras)", "8.10 ms", "8.46 ms", "118.2 FPS"),
+        ("Dual-Hand Landmark Engine", "144D Features + MLP (20 classes)", "3.13 ms", "3.22 ms", "310.6 FPS"),
+        ("Single-Hand Baseline MLP", "63D Invariant Features + MLP (26 classes)", "1.98 ms", "2.05 ms", "486.7 FPS"),
+        ("Multi-Modal Decision Fusion", "Confidence Arbitration (Python)", "< 0.01 ms", "< 0.01 ms", "> 1,000,000 FPS")
     ]
 
     for r_idx, row in enumerate(table5_data, start=1):
@@ -551,8 +551,8 @@ def build_chapter3(doc: Document):
     add_body_p(
         doc,
         "Note on Pipeline Benchmarking: Latency metrics were recorded using src/benchmark_latency.py over 50 iterations on an Apple Silicon M2 processor. "
-        "Default translation uses instantaneous offline dictionary mapping (0.001 ms mean latency, >10,000 phrases/s). Optional neural translation "
-        "(IndicTrans2) and speech synthesis (Meta MMS-TTS) modules are implemented in src/language_services for offline research evaluation."
+        "Figures vary by a few percent between runs; measured on Apple M2, CPU only. Default translation uses instantaneous offline dictionary mapping (< 0.01 ms mean latency, >10,000 phrases/s). Optional neural translation "
+        "(IndicTrans2) and speech synthesis (Meta MMS-TTS) modules are implemented in src/language_services/ for offline research evaluation."
     )
 
     print("Chapter 3 generated successfully.")

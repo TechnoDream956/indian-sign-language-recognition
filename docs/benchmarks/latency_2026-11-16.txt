@@ -1,0 +1,30 @@
+================================================================================
+          ISL PIPELINE INFERENCE & END-TO-END LATENCY BENCHMARK         
+================================================================================
+Benchmark Date: 2026-11-16
+Hardware:    Apple Silicon M2 (macOS-27.0-arm64-arm-64bit)
+Processor:   arm (Apple M2, CPU only)
+Python:      3.10.21
+Iterations:  50
+
+1. INFERENCE-ONLY & COMPONENT LATENCIES (Excludes Sensor Capture & OpenCV Drawing)
+Component                            | Median   | Mean     | p95      | Max      | FPS   
+--------------------------------------------------------------------------------
+dual_hand_feature_extraction_144d    |   0.08 ms |   0.08 ms |   0.09 ms |   0.09 ms | 12105.8
+dual_hand_engine_predict             |   3.13 ms |   3.22 ms |   3.81 ms |   4.10 ms | 310.6
+single_hand_mlp_predict              |   1.98 ms |   2.05 ms |   2.49 ms |   2.57 ms | 486.7
+cnn_engine_predict                   |   8.10 ms |   8.46 ms |   9.69 ms |   9.91 ms | 118.2
+fusion_engine_arbitration            |   0.00 ms |   0.00 ms |   0.00 ms |   0.00 ms | 1721422.9
+alphabet_engine_single_hand          |   8.94 ms |   8.97 ms |   9.20 ms |   9.39 ms | 111.5
+alphabet_engine_dual_hand            |  16.90 ms |  17.31 ms |  24.53 ms |  27.49 ms |  57.8
+
+2. TRUE FULL END-TO-END PIPELINE (InferenceEngine.process_frame)
+(Ingestion -> Unmirror -> MediaPipe Tracking -> Landmarks -> Models -> Fusion -> Drawing -> JPEG)
+Pipeline Mode                        | Median   | Mean     | p95      | Max      | FPS   
+--------------------------------------------------------------------------------
+full_pipeline_empty_frame            |  13.14 ms |  13.45 ms |  14.35 ms |  22.03 ms |  74.4
+full_pipeline_active_frame           |  43.18 ms |  42.68 ms |  46.53 ms |  51.37 ms |  23.4
+
+3. TAIL SKEW & STATISTICAL EXPLANATION:
+   Right-tail skew: Mean latency can be higher than or near p95 when occasional OS thread context switches, Apple Silicon frequency scaling, or Python memory allocations cause rare spike frames (reflected in p99 and max). Median represents typical sustained throughput. Figures vary by a few percent between runs; measured on Apple M2, CPU only.
+================================================================================

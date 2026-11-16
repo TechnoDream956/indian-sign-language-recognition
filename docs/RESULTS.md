@@ -22,8 +22,10 @@ All metrics were computed using `src/evaluate.py`. 95% Confidence Intervals were
 | **ISL RGB CNN Classifier** | 4-Block Conv2D + GAP | `(None, 128, 128, 3)` | RealSign Paired Test Subset (20 Classes) | 243 | **82.72%** [77.78%, 87.24%] | — | **0.7565** [0.7180, 0.7925] | — |
 | **ISL RGB CNN Classifier (Full)** | 4-Block Conv2D + GAP | `(None, 128, 128, 3)` | RealSign Image Held-Out (26 Classes) | 780 | **79.87%** [77.05%, 82.69%] | **80.77%** | **0.7474** [0.7361, 0.7567] | — |
 | **Multi-Modal Fused (WITHOUT K/T)** | Landmark Prior + CNN Agreement | `144D + 128x128` | RealSign Paired Test Subset (20 Classes) | 243 | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | — |
-| **ISL Single-Hand Baseline** | Dense MLP | `(None, 63)` | Combined Alphabet Same-Signer Held-Out | 536 | **75.93%** [72.20%, 79.66%] | **86.19%** | **0.6032** [0.5530, 0.6351] | 0.3355 |
+| **ISL Single-Hand Baseline** | Dense MLP | `(None, 63)` | Combined Alphabet Held-Out (signer overlap not audited)* | 536 | **75.93%** [72.20%, 79.66%] | **86.19%** | **0.6032** [0.5530, 0.6351] | 0.3355 |
 | **ISL Dual-Hand Model (Full Split)** | Deep MLP + BatchNorm | `(None, 144)` | Full Held-Out Test (RealSign + OpenHands) | 252 | **75.79%** [70.24%, 80.95%] | **82.94%** | **0.6683** [0.6385, 0.6974] | 0.3842 |
+
+*\*Note on Single-Hand Benchmark (N=536): The 95% bootstrap confidence interval [72.20%, 79.66%] includes values below the 75% target. Near-duplicate and signer-overlap audits were not performed on this 536-sample partition due to unpreserved training landmarks.*
 
 ### Post-Hoc Heuristic Overrides (Test-Data Tuned Estimates)
 | Configuration | Architecture | Input Shape | Test Partition | Test Samples | Top-1 Accuracy | Macro F1 | Status & Validity |
@@ -144,29 +146,61 @@ Evaluated on a **synthetic 50-frame dropout sequence, not real recordings** with
 
 ## 6. Hardware Inference Latency & End-to-End Throughput
 
-Measured on **Apple Silicon M2 (CPU)** using `src/benchmark_latency.py`:
+Measured on **Apple Silicon M2 (CPU)** using `src/benchmark_latency.py` (committed raw output: [`docs/benchmarks/latency_2026-11-16.txt`](file:///Users/aroitsehrawat2030/Downloads/Indian-Sign-Language-Recognition/docs/benchmarks/latency_2026-11-16.txt)):
+
+> [!NOTE]  
+> *Figures vary by a few percent between runs; measured on Apple M2, CPU only.*
 
 ### Section A: Component & Inference-Only Benchmarks (Excludes Sensor Capture & Drawing)
 | Component | Median Latency | Mean Latency | p95 Latency | Throughput (FPS) |
 |---|---|---|---|---|
-| **Dual-Hand 144D Feature Extraction** | 0.08 ms | 0.08 ms | 0.09 ms | 11,880.8 FPS |
-| **Dual-Hand Engine (Features + MLP)** | 2.91 ms | 2.91 ms | 3.01 ms | 343.1 FPS |
-| **Single-Hand MLP (63D) Inference** | 1.81 ms | 1.86 ms | 2.07 ms | 538.5 FPS |
-| **RGB CNN Engine (Crop + 128x128)** | 8.91 ms | 9.91 ms | 14.58 ms | 100.9 FPS |
-| **Multi-Modal Decision Fusion** | < 0.01 ms | < 0.01 ms | < 0.01 ms | > 600,000 FPS |
-| **AlphabetEngine Single-Hand Decision** | 9.12 ms | 9.28 ms | 9.92 ms | 107.8 FPS |
-| **AlphabetEngine Dual-Hand Decision** | 14.62 ms | 14.84 ms | 15.84 ms | 67.4 FPS |
+| **Dual-Hand 144D Feature Extraction** | 0.08 ms | 0.08 ms | 0.09 ms | 12,105.8 FPS |
+| **Dual-Hand Engine (Features + MLP)** | 3.13 ms | 3.22 ms | 3.81 ms | 310.6 FPS |
+| **Single-Hand MLP (63D) Inference** | 1.98 ms | 2.05 ms | 2.49 ms | 486.7 FPS |
+| **RGB CNN Engine (Crop + 128x128)** | 8.10 ms | 8.46 ms | 9.69 ms | 118.2 FPS |
+| **Multi-Modal Decision Fusion** | < 0.01 ms | < 0.01 ms | < 0.01 ms | > 1,000,000 FPS |
+| **AlphabetEngine Single-Hand Decision** | 8.94 ms | 8.97 ms | 9.20 ms | 111.5 FPS |
+| **AlphabetEngine Dual-Hand Decision** | 16.90 ms | 17.31 ms | 24.53 ms | 57.8 FPS |
 
 ### Section B: True Full End-to-End Pipeline (`InferenceEngine.process_frame`)
 *(Sensor Ingestion -> Orientation -> MediaPipe Hands Tracking -> Landmarks -> Models -> Fusion -> OpenCV Drawing -> JPEG Encoding)*
 | Pipeline Mode | Median Latency | Mean Latency | p95 Latency | Throughput (FPS) |
 |---|---|---|---|---|
-| **Empty Frame (No Hands Detected)** | 13.23 ms | 13.28 ms | 13.56 ms | 75.3 FPS |
-| **Active Dual-Hand Frame** | 39.99 ms | 44.16 ms | 53.96 ms | 22.6 FPS |
+| **Empty Frame (No Hands Detected)** | 13.14 ms | 13.45 ms | 14.35 ms | 74.4 FPS |
+| **Active Dual-Hand Frame** | 43.18 ms | 42.68 ms | 46.53 ms | 23.4 FPS |
 
 > [!NOTE]  
 > **Statistical Distribution & Tail Skew:**  
-> Arithmetic mean latency can approach or slightly exceed p95 due to right-tail skew from infrequent OS thread scheduling, Apple Silicon frequency transitions, and Python garbage collection pauses (reflected in p99 and max). Median represents sustained frame-rate performance.
+> Arithmetic mean latency can approach or slightly exceed p95 due to right-tail skew from infrequent OS thread scheduling, Apple Silicon frequency transitions, and Python garbage collection pauses (reflected in p99 and max). Median represents typical sustained throughput. Figures vary by a few percent between runs; measured on Apple M2, CPU only.
+
+---
+
+### Section C: Multilingual Translation & Neural Speech Benchmark (`src/language_services/`)
+
+Raw benchmark recorded by `tests/benchmark_languages.py` on 2026-11-16 (Apple Silicon M2, Darwin arm64, Python 3.10.21):
+
+```text
+================================================================================
+MULTILINGUAL TRANSLATION & NEURAL TTS BENCHMARK REPORT
+Date: 2026-11-16 | Platform: Darwin arm64 (Apple M2, CPU only)
+Memory: Peak RAM at start 390.42 MB -> Final Peak RAM 1202.67 MB
+================================================================================
+1. IndicTrans2 Neural Translation (Evaluated over 6 benchmark sentences):
+   - Hindi:     Sentence trans times: 2.086s (cold init), 0.161s, 0.110s, 0.050s, 0.039s, 0.041s (warm avg: ~40-60 ms)
+   - Bengali:   Sentence trans times: 0.035s, 0.086s, 0.031s, 0.058s, 0.038s, 0.042s (warm avg: ~35-50 ms)
+   - Marathi:   Sentence trans times: 0.046s, 0.045s, 0.041s, 0.048s, 0.050s, 0.040s (warm avg: ~45 ms)
+   - Tamil:     Sentence trans times: 0.059s, 0.044s, 0.064s, 0.049s, 0.106s, 0.310s (warm avg: ~55-70 ms)
+   - Telugu:    Sentence trans times: 0.072s, 0.041s, 0.036s, 0.075s, 0.056s, 0.052s (warm avg: ~55 ms)
+   - Gujarati:  Sentence trans times: 0.064s, 0.107s, 1.041s, 0.402s, 0.145s, 0.073s (warm avg: ~70-150 ms)
+   - Kannada:   Sentence trans times: 0.076s, 0.058s, 0.056s, 0.066s, 0.153s, 0.064s (warm avg: ~65-80 ms)
+   - Malayalam: Sentence trans times: 0.139s, 0.040s, 0.055s, 0.053s, 0.046s, 0.034s (warm avg: ~45-55 ms)
+
+2. Meta MMS-TTS Neural Speech Synthesis (VITS Architecture):
+   - Hindi:   Sentence 1: 7.433s (model load) | Warm sentences: 0.231s-0.341s for 1.8s-2.5s audio (RTF: 0.119-0.190)
+   - Bengali: Sentence 1: 2.544s (model load) | Warm sentences: 0.245s-0.492s for 1.8s-3.5s audio (RTF: 0.123-0.148)
+   - Other languages fallback to system / online tiers in the main app.
+================================================================================
+```
 
 ---
 
