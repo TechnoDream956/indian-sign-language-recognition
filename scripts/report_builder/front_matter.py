@@ -31,7 +31,7 @@ def build_front_matter(doc: Document):
     p23.text = (
         "We hereby declare that the work which is being presented in the report entitled "
         "“REAL-TIME INDIAN SIGN LANGUAGE ALPHABET RECOGNITION WITH MULTILINGUAL TRANSLATION AND SPEECH OUTPUT”, "
-        "is an authentic record of our own work carried out during the period from August 2026 to December 2026 "
+        "is an authentic record of our own work carried out during the period from [TODO: Start Month Year] to [TODO: End Month Year] "
         "at School of Computer Science Engineering and Technology, Bennett University, Greater Noida."
     )
     p23.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -49,7 +49,7 @@ def build_front_matter(doc: Document):
         p24.runs[0].font.name = 'Times New Roman'
         p24.runs[0].font.size = Pt(12)
 
-    # Student Signatures (4 members)
+    # Student Signatures (4 members) - Preserved as TODO placeholders
     p27 = doc.paragraphs[27]
     p27.text = "Signature of Candidates:"
     p27.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -59,10 +59,10 @@ def build_front_matter(doc: Document):
         p27.runs[0].bold = True
 
     members = [
-        ("Arpit Sehrawat", "Enroll. No. S24CSEU2426"),
-        ("Sachin Sharma", "Enroll. No. S24CSEU2436"),
-        ("Abhu Rai", "Enroll. No. S24CSEU2438"),
-        ("Yash Upadhyay", "Enroll. No. S24CSEU2430")
+        ("Arpit [TODO: Full Name]", "Enroll. No. [TODO: Enrollment No.]"),
+        ("Sachin [TODO: Full Name]", "Enroll. No. [TODO: Enrollment No.]"),
+        ("Abhu [TODO: Full Name]", "Enroll. No. [TODO: Enrollment No.]"),
+        ("Yash [TODO: Full Name]", "Enroll. No. [TODO: Enrollment No.]")
     ]
 
     p29 = doc.paragraphs[29]
@@ -110,11 +110,10 @@ def build_front_matter(doc: Document):
     p42 = doc.paragraphs[42]
     p42.text = (
         "We would like to take this opportunity to express our deepest gratitude to our project mentor, "
-        "Dr. Reshu Chaudhary, School of Computer Science Engineering and Technology, Bennett University, "
-        "for her exceptional mentorship, invaluable guidance, constructive critique, and continuous encouragement "
-        "throughout the design, development, and rigorous evaluation of this project. Her deep technical insights into "
-        "computer vision, machine learning architectures, and academic research rigor were instrumental in guiding "
-        "our engineering decisions and methodological discipline."
+        "[TODO: Faculty Mentor Name, Designation], School of Computer Science Engineering and Technology, Bennett University, "
+        "for guidance, constructive critique, and encouragement throughout the design, development, and rigorous evaluation "
+        "of this project. Technical insights into computer vision, machine learning architectures, and academic research rigor "
+        "were instrumental in guiding our engineering decisions and methodological discipline."
     )
     p42.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     if p42.runs:

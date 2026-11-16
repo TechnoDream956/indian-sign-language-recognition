@@ -208,11 +208,15 @@ To maintain rigorous scientific standards, all model performance metrics are eva
 | Model Tier | Architecture & Input | Target Classes | Same-Signer Held-Out Partition | Top-1 Accuracy [95% CI] | Top-3 Accuracy | Macro F1 [95% CI] | Operational Status |
 | :--- | :--- | :---: | :--- | :---: | :---: | :---: | :--- |
 | **Integrated Dual-Hand Model** | Deep MLP + BatchNorm (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | Integrated Pipeline |
-| **Dual-Hand (+ K/T Orientation Override)** | Deep MLP + Heuristic (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **83.13%** [78.19%, 87.65%] | **84.36%** | **0.7834** [0.7394, 0.8190] | **Default Active** |
+| **Dual-Hand (+ K/T Orientation Override)** | Deep MLP + Heuristic (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **83.13%** [78.19%, 87.65%]* | **84.36%** | **0.7834** [0.7394, 0.8190]* | **Default Active** |
 | **Dual-Hand (Full Test Split)** | Deep MLP + BatchNorm (`144D`) | **20** Bimanual | Full Split (RealSign + OpenHands N=252) | **75.79%** [70.24%, 80.95%] | **82.94%** | **0.6683** [0.6385, 0.6974] | Benchmark Reference |
 | **Single-Hand Baseline** | Dense MLP ($128\to64\to32$, `63D`) | **26** (A–Z) | Combined Alphabet Held-Out (N=536) | **75.93%** [72.20%, 79.66%] | **86.19%** | **0.6032** [0.5530, 0.6351] | **Active Baseline** |
 | **RGB Visual CNN** | 4-Block Conv2D + GAP ($128\times128\times3$) | **26** (A–Z) | RealSign Image Held-Out (N=780) | **79.87%** [77.05%, 82.69%] | **80.77%** | **0.7474** [0.7361, 0.7567] | **Active Multi-Modal** |
-| **Paired Decision Fusion** | Landmark Prior + CNN Agreement | **20** Bimanual | Paired Same-Signer Subset (N=243) | **83.13%** [78.19%, 87.65%] | **84.36%** | **0.7834** [0.7394, 0.8190] | **Active Decision Engine** |
+| **Paired Decision Fusion** | Landmark Prior + CNN Agreement | **20** Bimanual | Paired Same-Signer Subset (N=243) | **83.13%** [78.19%, 87.65%]* | **84.36%** | **0.7834** [0.7394, 0.8190]* | Matches Best Branch (0% gain)* |
+
+*\*Decision Fusion Honesty: Multi-modal fusion matches the best single branch (83.13% Geometry+KT vs 82.72% CNN alone) and does not improve accuracy. When branches disagree (45 samples, 18.52%), both are wrong >91% of the time (Geom+KT acc 8.89%, CNN acc 6.67%, Fused acc 8.89%), and fusion defaults to the landmark prior.*  
+*\*K/T Override Tuning Note: Threshold was formulated while inspecting evaluation misclassifications; this +4.94% gain is possibly tuned on test data.*  
+*\*Near-Duplicate Check: Removing the 4.5% near-duplicate samples (1-NN Euclidean distance < 0.10, N=232) yields 77.16% baseline, 82.33% with K/T override, 81.90% CNN alone, and 82.33% fused, confirming metrics are stable.*
 
 > [!NOTE]  
 > **Reconciliation of Test Partition Size (252 vs 243):**  
@@ -232,7 +236,7 @@ While offline evaluation on controlled held-out splits exhibits high accuracy (7
 2. **Hand Occlusion Dropout & Pipeline Flapping (Resolved via 2-Frame Hysteresis):**  
    - *Finding:* In two-handed signs where hands touch or overlap (`B`, `D`, `P`, `M`), MediaPipe Hands intermittently fails to detect both hands for 1–2 frames, dropping reported hand count from 2 to 1 and prematurely resetting the debounce stability counter.
    - *Fix Applied:* Added a 2-frame hysteresis hold (`hand_drop_grace_frames=2`) that carries forward the occluded hand's last known position for up to 2 frames before falling back to single-hand mode.
-   - *Measured Result:* Tested on an intermittent 50-frame dropout sequence, reducing pipeline flapping by **85.7%** (from 7 switches to 1).
+   - *Measured Result:* Tested on a **synthetic 50-frame dropout sequence, not real recordings**, reducing pipeline flapping by **85.7%** (from 7 switches to 1).
 3. **Single-Signer Domain Shift & Need for Multi-Signer Training:**  
    - *Finding:* Audited via `tools/audit/leakage_audit.py`. While train/val/test splits have **0.0% ID overlap**, all samples in `RealSign` originate from the same signer under identical studio lighting. When tested on novel signers with differing hand sizes, joint elasticity, and lighting conditions, prediction confidence drops. Future retraining cycles must incorporate multi-signer datasets.
 
@@ -643,11 +647,12 @@ OK
 - **User Experience on Failure:** When an unlisted sentence fails online translation, the system converts phonetic syllables into the target script (e.g. Devanagari, Bengali, Tamil). If transliteration is unavailable, the user sees the original English text accompanied by an informative UI toast. The application **never crashes or returns empty text**.
 
 ### Speech Synthesis (TTS) Fallback Chain
-- **Tier 1 (macOS `say`):** Native speech synthesis verified locally on Apple Silicon for English, Hindi, Marathi, Bengali, Tamil, Telugu, and Kannada.
-- **Tier 2 (`pyttsx3`):** Offline SAPI5 / eSpeak / NSSpeechSynthesizer verified locally for Gujarati, Malayalam, and Punjabi.
-- **Tier 3 (`gTTS`):** Cloud-assisted MP3 generation with local audio playback (`afplay`/`paplay`/`aplay`/`powershell`).
+- **Tier 1 (macOS `say`):** Native speech synthesis verified locally on Apple Silicon for English, Hindi, Marathi, Bengali, Tamil, Telugu, and Kannada via system synthesis calls.
+- **Tier 2 (`pyttsx3`):** Offline SAPI5 / eSpeak / NSSpeechSynthesizer verified locally on Apple Silicon via system synthesis calls (`nsss` AppKit backend); SAPI5 on Windows and `espeak` on Linux are **untested on real hardware**.
+- **Tier 3 (`gTTS`):** Cloud-assisted MP3 generation with local audio playback (`afplay` verified on macOS; `paplay`/`aplay` on Linux and `powershell` on Windows are **untested on real hardware**).
 - **Tier 4 (Browser Web Speech API):** Automatic client-side audio generation used when running in headless/Docker environments or when physical audio drivers are absent.
-- *\*Note: Linux and Windows audio and camera pipelines are implemented with standard cross-platform libraries but remain untested on physical Linux/Windows hardware.*
+- *\*Note on TTS Verification: Synthesis calls succeeded without error; audible phonetic correctness is unverified by human ear. While macOS lacks a dedicated named Malayalam system voice in `say -v '?'`, the `nsss` engine in `pyttsx3` accepted the Malayalam string at Tier 2 without raising an exception.*
+- *\*Note on Model Redistribution: Redistribution rights for model checkpoints trained on RealSign, OpenHands, and Ayesha are **unknown** (retained under academic fair use for education/reproducibility; commercial/public distribution rights unverified).*
 
 ---
 

@@ -37,12 +37,12 @@ def build_cover_page(doc: Document):
         p2.runs[0].font.size = Pt(12)
         p2.runs[0].bold = True
 
-    # Student Names & Enrollment (4 members)
+    # Student Names & Enrollment (4 members) - Preserved as TODO placeholders
     students = [
-        "ARPIT SEHRAWAT (S24CSEU2426)",
-        "SACHIN SHARMA (S24CSEU2436)",
-        "ABHU RAI (S24CSEU2438)",
-        "YASH UPADHYAY (S24CSEU2430)"
+        "ARPIT [TODO: Full Name] (Enrollment No. [TODO: Enrollment No.])",
+        "SACHIN [TODO: Full Name] (Enrollment No. [TODO: Enrollment No.])",
+        "ABHU [TODO: Full Name] (Enrollment No. [TODO: Enrollment No.])",
+        "YASH [TODO: Full Name] (Enrollment No. [TODO: Enrollment No.])"
     ]
 
     p5 = doc.paragraphs[5]
@@ -105,7 +105,7 @@ def build_cover_page(doc: Document):
         p17.runs[0].bold = True
 
     p19 = doc.paragraphs[19]
-    p19.text = "\tDec 2026"
+    p19.text = "\t[TODO: Month, Year]"
     p19.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if p19.runs:
         p19.runs[0].font.name = 'Times New Roman'

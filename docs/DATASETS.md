@@ -16,16 +16,16 @@ This document describes the provenance, schemas, collection methodology, redistr
 
 ## 1. Dataset Provenance, Counts & Licensing
 
-| Dataset | Modality / Format | Total Samples | Split Distribution | Provenance & Origin | License Status | Redistribution Policy |
+| Dataset | Modality / Format | Total Samples | Split Distribution | Provenance & Origin | License Status | Redistribution Policy & Model Rights |
 | :--- | :--- | :---: | :--- | :--- | :--- | :--- |
-| **RealSign** | Cropped RGB ($128\times128$) & MediaPipe 3D Landmarks | 1,613 dual-hand samples | • Train: 1,189<br>• Val: 181<br>• Held-Out Test: 243 | Academic ISL research dataset recorded in controlled indoor conditions. | **TODO: confirm** *(Academic download; upstream terms unverified)* | **DO NOT REDISTRIBUTE RAW ASSETS.** Pretrained weights only in repository. |
-| **OpenHands (ISL subset)** | 3D Skeletal Landmarks | 9 held-out test samples | • Test: 9 | OpenHands Sign Language open-source project repository. | **TODO: confirm** *(Permissive open-source; specific terms unverified)* | **DO NOT REDISTRIBUTE RAW ASSETS.** Precomputed features only. |
-| **Ayesha (ISL Fingerspelling)** | 2D/3D Landmarks & RGB Crops | ~2,500 single-hand samples | • Test: 536 single-hand | Public ISL fingerspelling alphabet collection. | **TODO: confirm** *(Community repository; terms unverified)* | **DO NOT REDISTRIBUTE RAW ASSETS.** Frozen baseline weights only. |
+| **RealSign** | Cropped RGB ($128\times128$) & MediaPipe 3D Landmarks | 1,613 dual-hand samples | • Train: 1,189<br>• Val: 181<br>• Held-Out Test: 243 | Academic ISL research dataset recorded in controlled indoor conditions. | **TODO: confirm** *(Academic download; upstream terms unverified)* | **Raw Assets:** DO NOT REDISTRIBUTE.<br>**Trained Weights:** **Unknown** (retained under academic fair use for education/reproducibility; commercial/public distribution rights unverified). |
+| **OpenHands (ISL subset)** | 3D Skeletal Landmarks | 9 held-out test samples | • Test: 9 | OpenHands Sign Language open-source project repository. | **TODO: confirm** *(Permissive open-source; specific terms unverified)* | **Raw Assets:** DO NOT REDISTRIBUTE.<br>**Trained Weights:** **Unknown** (specific terms for derivative checkpoints unverified). |
+| **Ayesha (ISL Fingerspelling)** | 2D/3D Landmarks & RGB Crops | ~2,500 single-hand samples | • Test: 536 single-hand | Public ISL fingerspelling alphabet collection. | **TODO: confirm** *(Community repository; terms unverified)* | **Raw Assets:** DO NOT REDISTRIBUTE.<br>**Trained Weights:** **Unknown** (terms for derivative checkpoints unverified). |
 | **Project Live Benchmark Recordings** | Landmark JSON & Session Telemetry | Variable (ad-hoc live sessions) | Recorded via `tools/collection/record_live_benchmark_samples.py` | Locally captured by team members for empirical testing. | **MIT License (Project Internal)** | Excluded from git tracking via `.gitignore` (`data/live_benchmark_samples/`). |
 
 > [!CAUTION]
-> **Redistribution Compliance:**  
-> The repository ships **frozen model checkpoints (`models/*.h5`) and JSON label maps only**. Raw image and video archives (`Dataset.zip`, raw MP4s) are located exclusively in local staging reserves and are strictly excluded from git tracking to prevent any potential licensing or distribution violations.
+> **Redistribution Compliance & Derivative Model Rights:**  
+> The repository ships **frozen model checkpoints (`models/*.h5`) and JSON label maps only** for educational reproducibility. Raw image and video archives (`Dataset.zip`, raw MP4s) are strictly excluded from git tracking. Redistribution rights for models trained on RealSign, OpenHands, and Ayesha are **Unknown** because none of the upstream releases provide explicit license grants authorizing downstream weight distribution.
 
 ---
 

@@ -196,7 +196,11 @@ Open your web browser to:
 - **What the User Sees on Failure:** If an unknown sentence is signed and online translation fails or is rate-limited, the system executes phonetic transliteration (e.g. converting Latin character phonetics into Devanagari, Bengali, Tamil, etc.). If transliteration is unavailable, the user sees the raw English text with an indicator toast. The application never crashes or outputs empty strings.
 
 ### Speech Synthesis Fallback Tiers:
-1. **Tier 1 (macOS `say`):** Verified locally for English, Hindi, Marathi, Bengali, Tamil, Telugu, and Kannada.
-2. **Tier 2 (`pyttsx3`):** Verified locally on macOS for Gujarati, Malayalam, and Punjabi; serves as the primary offline engine for Windows (SAPI5) and Linux (`espeak`).
-3. **Tier 3 (`gTTS`):** High-fidelity cloud MP3 generation with local audio player playback (`afplay`/`paplay`/`aplay`/`powershell`).
+1. **Tier 1 (macOS `say`):** Verified locally on macOS for English, Hindi, Marathi, Bengali, Tamil, Telugu, and Kannada via system synthesis calls.
+2. **Tier 2 (`pyttsx3`):** Verified locally on macOS Apple Silicon via system synthesis calls (`nsss` AppKit backend); SAPI5 on Windows and `espeak` on Linux are **untested on real hardware**.
+3. **Tier 3 (`gTTS`):** High-fidelity cloud MP3 generation with local audio player playback (`afplay` on macOS; `paplay`/`aplay` on Linux and `powershell` on Windows are **untested on real hardware**).
 4. **Tier 4 (Browser Web Speech API):** Client-side speech synthesis used automatically in headless/containerized environments or when local audio output devices are missing.
+
+> [!NOTE]  
+> **Verification Methodology & Malayalam Voice Note:**  
+> Local TTS testing verified that synthesis process calls returned 0 without throwing an exception and generated valid audio streams (audible phonetic correctness unverified by human ear). While macOS `say -v '?'` does not list a dedicated named Malayalam system voice, the macOS `nsss` Cocoa synthesis bridge in `pyttsx3` accepted the Malayalam Unicode string without raising an error, succeeding at the process level at Tier 2. For verified phonetic clarity in Malayalam, Tier 3 (`gTTS`) or browser-side synthesis is recommended.
