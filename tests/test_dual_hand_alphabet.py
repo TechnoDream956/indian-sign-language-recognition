@@ -304,6 +304,47 @@ class TestAlphabetEngineDualHand(unittest.TestCase):
         self.assertEqual(status_none["hand_status"], "NO HAND")
         self.assertFalse(status_none["hand_detected"])
 
+    def test_hand_count_hysteresis_holds_dual_mode_during_temporary_drop(self):
+        """When 2 hands drop to 1 hand, dual-hand pipeline is held for grace frames before falling back."""
+        # 1. 2 hands frame
+        _ = self.engine.process_dual_landmarks(
+            [self.left_lms, self.right_lms],
+            [self.left_handedness, self.right_handedness],
+            current_time=0.10
+        )
+        self.assertEqual(self.engine._dual_hold_counter, 0)
+        self.assertIsNotNone(self.engine._prev_c1)
+
+        # 2. Temporary 1-hand drop (Frame 1): Should hold dual-hand
+        s_drop1 = self.engine.process_dual_landmarks(
+            [self.right_lms],
+            [self.right_handedness],
+            current_time=0.15
+        )
+        self.assertEqual(s_drop1["hand_count"], 1)
+        self.assertEqual(self.engine._dual_hold_counter, 1)
+        self.assertIn("Dual-Hand", s_drop1["active_pipeline"])
+
+        # 3. Temporary 1-hand drop (Frame 2): Should hold dual-hand
+        s_drop2 = self.engine.process_dual_landmarks(
+            [self.right_lms],
+            [self.right_handedness],
+            current_time=0.20
+        )
+        self.assertEqual(s_drop2["hand_count"], 1)
+        self.assertEqual(self.engine._dual_hold_counter, 2)
+        self.assertIn("Dual-Hand", s_drop2["active_pipeline"])
+
+        # 4. Sustained 1-hand drop (Frame 3): Exceeds grace frames (2), falls back to Single-Hand
+        s_drop3 = self.engine.process_dual_landmarks(
+            [self.right_lms],
+            [self.right_handedness],
+            current_time=0.25
+        )
+        self.assertEqual(s_drop3["hand_count"], 1)
+        self.assertEqual(self.engine._dual_hold_counter, 0)
+        self.assertIn("Single-Hand", s_drop3["active_pipeline"])
+
 
 if __name__ == "__main__":
     unittest.main()

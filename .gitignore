@@ -65,6 +65,7 @@ data/translation_cache.json
 # Runtime Feedback & Language Services Data Caches
 data/feedback/
 data/language_services/
+data/live_benchmark_samples/
 
 # Temporary files, Logs & Scratch
 logs/

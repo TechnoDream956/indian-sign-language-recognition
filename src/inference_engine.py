@@ -228,6 +228,8 @@ class InferenceEngine:
             "alphabet_translation": "",
         }
         self._frame_bytes: Optional[bytes] = None
+        self._model_input_unmirrored: bool = True
+        self._state["model_input_unmirrored"] = True
 
         # Preload models
         try:
@@ -283,6 +285,16 @@ class InferenceEngine:
             self._app_mode = mode
             self._state["app_mode"] = mode
             return {"success": True, "app_mode": mode}
+
+    def set_model_input_unmirrored(self, enabled: bool) -> dict:
+        with self._lock:
+            self._model_input_unmirrored = bool(enabled)
+            self._state["model_input_unmirrored"] = self._model_input_unmirrored
+        return {"ok": True, "model_input_unmirrored": self._model_input_unmirrored}
+
+    def get_model_input_unmirrored(self) -> bool:
+        with self._lock:
+            return getattr(self, "_model_input_unmirrored", True)
 
     # ------------------------------------------------------------------ #
     #  Camera Hardware Controls                                          #
@@ -670,11 +682,23 @@ class InferenceEngine:
 
         now = current_time if current_time is not None else time.time()
 
-        # Mirror image for natural user interaction if not already mirrored
-        image = frame if is_mirrored else cv2.flip(frame, 1)
+        # Determine whether model input should be unmirrored (matching training)
+        unmirror_models = getattr(self, "_model_input_unmirrored", True)
 
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        rgb.flags.writeable = False
+        if unmirror_models:
+            # Model receives unmirrored frame (third-person frontal orientation matching training data)
+            model_frame = cv2.flip(frame, 1) if is_mirrored else frame
+            rgb_model = cv2.cvtColor(model_frame, cv2.COLOR_BGR2RGB)
+            rgb_model.flags.writeable = False
+
+            # Display image is mirrored for intuitive selfie view
+            display_image = frame if is_mirrored else cv2.flip(frame, 1)
+        else:
+            # Legacy behavior: both model and display receive flipped frame
+            display_image = frame if is_mirrored else cv2.flip(frame, 1)
+            model_frame = display_image
+            rgb_model = cv2.cvtColor(model_frame, cv2.COLOR_BGR2RGB)
+            rgb_model.flags.writeable = False
 
         t_start = time.time()
 
@@ -692,8 +716,8 @@ class InferenceEngine:
                     min_tracking_confidence=0.50,
                 )
 
-            hand_res = self._hands_detector.process(rgb)
-            rgb.flags.writeable = True
+            hand_res = self._hands_detector.process(rgb_model)
+            rgb_model.flags.writeable = True
             t_mediapipe_ms = round((time.time() - t_mp_start) * 1000, 2)
 
             multi_lms = hand_res.multi_hand_landmarks
@@ -712,37 +736,82 @@ class InferenceEngine:
                             h_score = float(h_class.score)
                         except Exception:
                             pass
-                    pts = [
-                        [round(float(lm.x), 4), round(float(lm.y), 4), round(float(lm.z), 4)]
-                        for lm in hand_lms.landmark
-                    ]
-                    extracted_landmarks.append({
-                        "handedness": h_label,
-                        "score": round(h_score, 4),
-                        "points": pts,
-                    })
+
+                    if unmirror_models:
+                        # Display points are mirrored to overlay accurately on the mirrored video element
+                        pts_display = [
+                            [round(1.0 - float(lm.x), 4), round(float(lm.y), 4), round(float(lm.z), 4)]
+                            for lm in hand_lms.landmark
+                        ]
+                        pts_raw = [
+                            [round(float(lm.x), 4), round(float(lm.y), 4), round(float(lm.z), 4)]
+                            for lm in hand_lms.landmark
+                        ]
+                        extracted_landmarks.append({
+                            "handedness": h_label,
+                            "score": round(h_score, 4),
+                            "points": pts_display,
+                            "raw_points": pts_raw,
+                        })
+                    else:
+                        pts = [
+                            [round(float(lm.x), 4), round(float(lm.y), 4), round(float(lm.z), 4)]
+                            for lm in hand_lms.landmark
+                        ]
+                        extracted_landmarks.append({
+                            "handedness": h_label,
+                            "score": round(h_score, 4),
+                            "points": pts,
+                        })
 
             # Check if MJPEG encoding is needed (local hardware mode or active web stream)
             jpeg_bytes = None
             needs_jpeg = (not self._is_cloud) or getattr(self, "_has_video_subscribers", False)
             if needs_jpeg:
                 if multi_lms and hasattr(self, "_mp_drawing"):
-                    for hand_landmarks in multi_lms:
-                        self._mp_drawing.draw_landmarks(
-                            image,
-                            hand_landmarks,
-                            self._mp_hands.HAND_CONNECTIONS,
-                            self._mp_drawing_styles.get_default_hand_landmarks_style(),
-                            self._mp_drawing_styles.get_default_hand_connections_style(),
-                        )
-                _, jpeg = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    if unmirror_models:
+                        try:
+                            from mediapipe.framework.formats import landmark_pb2
+                            for hand_landmarks in multi_lms:
+                                disp_list = landmark_pb2.NormalizedLandmarkList()
+                                for lm in hand_landmarks.landmark:
+                                    mlm = disp_list.landmark.add()
+                                    mlm.x = 1.0 - float(lm.x)
+                                    mlm.y = float(lm.y)
+                                    mlm.z = float(lm.z)
+                                self._mp_drawing.draw_landmarks(
+                                    display_image,
+                                    disp_list,
+                                    self._mp_hands.HAND_CONNECTIONS,
+                                    self._mp_drawing_styles.get_default_hand_landmarks_style(),
+                                    self._mp_drawing_styles.get_default_hand_connections_style(),
+                                )
+                        except Exception:
+                            for hand_landmarks in multi_lms:
+                                self._mp_drawing.draw_landmarks(
+                                    display_image,
+                                    hand_landmarks,
+                                    self._mp_hands.HAND_CONNECTIONS,
+                                    self._mp_drawing_styles.get_default_hand_landmarks_style(),
+                                    self._mp_drawing_styles.get_default_hand_connections_style(),
+                                )
+                    else:
+                        for hand_landmarks in multi_lms:
+                            self._mp_drawing.draw_landmarks(
+                                display_image,
+                                hand_landmarks,
+                                self._mp_hands.HAND_CONNECTIONS,
+                                self._mp_drawing_styles.get_default_hand_landmarks_style(),
+                                self._mp_drawing_styles.get_default_hand_connections_style(),
+                            )
+                _, jpeg = cv2.imencode(".jpg", display_image, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 jpeg_bytes = jpeg.tobytes()
 
             # Execute Multi-Modal Recognition and Fusion under _infer_lock (WITHOUT holding self._lock!)
             t_model_start = time.time()
             if self._alphabet_engine is not None:
                 alpha_status = self._alphabet_engine.process_dual_landmarks(
-                    multi_lms, multi_handedness, rgb_frame=rgb, current_time=now
+                    multi_lms, multi_handedness, rgb_frame=rgb_model, current_time=now
                 )
             else:
                 alpha_status = {}
