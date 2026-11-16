@@ -322,10 +322,16 @@ class AlphabetEngine:
         cooldown_seconds: float = 0.8,
         word_buffer: Optional[WordBuffer] = None,
         tts_engine: Optional[Any] = None,
+        hand_drop_grace_frames: int = 2,
+        enable_kt_override: bool = True,
+        enable_bh_clamp: bool = False,
     ):
         self.confidence_threshold = confidence_threshold
         self.stability_frames = stability_frames
         self.cooldown_seconds = cooldown_seconds
+        self.hand_drop_grace_frames = hand_drop_grace_frames
+        self.enable_kt_override = enable_kt_override
+        self.enable_bh_clamp = enable_bh_clamp
 
         self.word_buffer = word_buffer if word_buffer is not None else WordBuffer()
         self.tts_engine = tts_engine
@@ -353,6 +359,7 @@ class AlphabetEngine:
         self.raw_prediction: Optional[str] = None
         self.raw_confidence: float = 0.0
         self.stable_letter: Optional[str] = None
+        self.last_stable_letter: Optional[str] = None
         self.emitted_letter: Optional[str] = None
         self.state: str = "IDLE"
 
@@ -362,6 +369,11 @@ class AlphabetEngine:
         self.last_emitted_time: float = 0.0
         self.has_released_same_letter: bool = True
         self.emission_counter: int = 0
+
+        # Hand-Count Hysteresis & Temporal Smoothing
+        self._prev_c1: Optional[np.ndarray] = None
+        self._prev_c2: Optional[np.ndarray] = None
+        self._dual_hold_counter: int = 0
 
         # Detailed Telemetry Cache
         self._last_telemetry: Dict[str, Any] = {}
@@ -396,6 +408,9 @@ class AlphabetEngine:
         self.consecutive_candidate = None
         self.consecutive_count = 0
         self.has_released_same_letter = True
+        self._prev_c1 = None
+        self._prev_c2 = None
+        self._dual_hold_counter = 0
         self.state = "RESET"
 
     def reset_all(self) -> None:
@@ -403,6 +418,7 @@ class AlphabetEngine:
         self.reset_debounce_state()
         self.word_buffer.clear_all()
         self.last_emitted_letter = None
+        self.last_stable_letter = None
         self.last_emitted_time = 0.0
         self.state = "IDLE"
 
@@ -459,6 +475,9 @@ class AlphabetEngine:
 
         # Case A: 0 Hands Detected
         if hand_count == 0:
+            self._prev_c1 = None
+            self._prev_c2 = None
+            self._dual_hold_counter = 0
             self.reset_debounce_state()
             self.state = "NO_HAND"
             self._last_telemetry = {
@@ -478,74 +497,110 @@ class AlphabetEngine:
             }
             return self._build_status(hand_detected=False)
 
-        # Case B: 1 Hand Detected -> Single-Hand 26-Class Pipeline
+        # Case B: 1 Hand Detected -> Single-Hand 26-Class Pipeline (with Dual-Hand Hysteresis Hold)
         elif hand_count == 1:
-            single_feats = left_feats if meta["has_left"] else right_feats
-            single_coords = meta["c1"] if meta["has_left"] else meta["c2"]
-            landmark_pred_label = None
-            landmark_conf = 0.0
-            lm_top5 = []
+            if (
+                self.hand_drop_grace_frames > 0
+                and self._prev_c1 is not None
+                and self._prev_c2 is not None
+                and self._dual_hold_counter < self.hand_drop_grace_frames
+                and self.dual_hand_engine is not None
+            ):
+                # Hysteresis Hold: temporary 1-frame occlusion during 2-hand sign
+                self._dual_hold_counter += 1
+                if meta["has_left"]:
+                    c1 = meta["c1"]
+                    c2 = self._prev_c2
+                else:
+                    c1 = self._prev_c1
+                    c2 = meta["c2"]
+                self._prev_c1 = c1.copy()
+                self._prev_c2 = c2.copy()
 
-            if self.single_model is not None:
-                batch = single_feats.reshape(1, 63).astype(np.float32)
-                probs = self.single_model(batch, training=False).numpy()[0]
-                idx = int(np.argmax(probs))
-                landmark_conf = float(probs[idx])
-                landmark_pred_label = self.inv_single_label_map.get(idx, "--")
+                landmark_res = self.dual_hand_engine.predict(c1, c2)
+                landmark_pred_label = landmark_res.get("pred_label")
+                landmark_conf = float(landmark_res.get("confidence", 0.0))
+                lm_top5 = landmark_res.get("top5", [])
 
-                top5_idx = np.argsort(probs)[::-1][:5]
-                lm_top5 = [
-                    {"class": self.inv_single_label_map.get(i, f"C_{i}"), "confidence": round(float(probs[i]), 4)}
-                    for i in top5_idx
-                ]
+                # Run CNN Pathway if RGB frame is available
+                cnn_res = None
+                if rgb_frame is not None:
+                    cnn_res = self.cnn_engine.predict(rgb_frame, multi_hand_landmarks)
 
-                # Physical Hand Geometry Checks (I/Y and U/V)
-                if len(single_coords) >= 21 and not np.allclose(single_coords, 0.0):
-                    wrist = single_coords[0]
-                    scale = float(np.linalg.norm(single_coords[9] - wrist))
-                    if scale > 1e-4:
-                        pinky_ext = float(np.linalg.norm(single_coords[20] - single_coords[17])) / scale
-                        thumb_dist = float(np.linalg.norm(single_coords[4] - single_coords[5])) / scale
-                        index_ext = float(np.linalg.norm(single_coords[8] - single_coords[5])) / scale
-                        middle_ext = float(np.linalg.norm(single_coords[12] - single_coords[9])) / scale
+                fusion_res = self.fusion_engine.fuse(landmark_res, cnn_res, hand_detected=True)
+                active_pipeline = f"Dual-Hand (20 Classes, Hold {self._dual_hold_counter}/{self.hand_drop_grace_frames})"
+                hand_status_str = "1 HAND"
+            else:
+                self._prev_c1 = None
+                self._prev_c2 = None
+                self._dual_hold_counter = 0
 
-                        # 1. I vs Y: Pinky up + folded index & middle
-                        if pinky_ext > 0.8 and index_ext < 0.6 and middle_ext < 0.6:
-                            if thumb_dist < 0.85:
-                                landmark_pred_label = "I"
-                                landmark_conf = max(landmark_conf, 0.88)
-                            elif thumb_dist >= 1.15:
-                                landmark_pred_label = "Y"
-                                landmark_conf = max(landmark_conf, 0.88)
+                single_feats = left_feats if meta["has_left"] else right_feats
+                single_coords = meta["c1"] if meta["has_left"] else meta["c2"]
+                landmark_pred_label = None
+                landmark_conf = 0.0
+                lm_top5 = []
 
-                        # 2. U vs V: Index + Middle up
-                        if index_ext > 0.8 and middle_ext > 0.8:
-                            tip_dist = float(np.linalg.norm(single_coords[8] - single_coords[12])) / scale
-                            if tip_dist < 0.38 and landmark_pred_label in ["V", "H", "B", "U"]:
-                                landmark_pred_label = "U"
-                                landmark_conf = max(landmark_conf, 0.88)
-                            elif tip_dist >= 0.42 and landmark_pred_label in ["U", "H", "B", "V"]:
-                                landmark_pred_label = "V"
-                                landmark_conf = max(landmark_conf, 0.88)
+                if self.single_model is not None:
+                    batch = single_feats.reshape(1, 63).astype(np.float32)
+                    probs = self.single_model(batch, training=False).numpy()[0]
+                    idx = int(np.argmax(probs))
+                    landmark_conf = float(probs[idx])
+                    landmark_pred_label = self.inv_single_label_map.get(idx, "--")
 
-            landmark_res = {
-                "pred_label": landmark_pred_label,
-                "confidence": landmark_conf,
-                "top5": lm_top5,
-                "status": "OK",
-                "model_name": "26-Class Single-Hand MLP",
-            }
+                    top5_idx = np.argsort(probs)[::-1][:5]
+                    lm_top5 = [
+                        {"class": self.inv_single_label_map.get(i, f"C_{i}"), "confidence": round(float(probs[i]), 4)}
+                        for i in top5_idx
+                    ]
 
-            # Run CNN Pathway if RGB frame is available
-            cnn_res = None
-            if rgb_frame is not None:
-                cnn_res = self.cnn_engine.predict(rgb_frame, multi_hand_landmarks)
+                    # Physical Hand Geometry Checks (I/Y and U/V)
+                    if len(single_coords) >= 21 and not np.allclose(single_coords, 0.0):
+                        wrist = single_coords[0]
+                        scale = float(np.linalg.norm(single_coords[9] - wrist))
+                        if scale > 1e-4:
+                            pinky_ext = float(np.linalg.norm(single_coords[20] - single_coords[17])) / scale
+                            thumb_dist = float(np.linalg.norm(single_coords[4] - single_coords[5])) / scale
+                            index_ext = float(np.linalg.norm(single_coords[8] - single_coords[5])) / scale
+                            middle_ext = float(np.linalg.norm(single_coords[12] - single_coords[9])) / scale
 
-            # Fuse Landmark & CNN Pathways
-            fusion_res = self.fusion_engine.fuse(landmark_res, cnn_res, hand_detected=True)
+                            # 1. I vs Y: Pinky up + folded index & middle
+                            if pinky_ext > 0.8 and index_ext < 0.6 and middle_ext < 0.6:
+                                if thumb_dist < 0.85:
+                                    landmark_pred_label = "I"
+                                    landmark_conf = max(landmark_conf, 0.88)
+                                elif thumb_dist >= 1.15:
+                                    landmark_pred_label = "Y"
+                                    landmark_conf = max(landmark_conf, 0.88)
 
-            active_pipeline = "Single-Hand (26 Classes)"
-            hand_status_str = "1 HAND"
+                            # 2. U vs V: Index + Middle up
+                            if index_ext > 0.8 and middle_ext > 0.8:
+                                tip_dist = float(np.linalg.norm(single_coords[8] - single_coords[12])) / scale
+                                if tip_dist < 0.38 and landmark_pred_label in ["V", "H", "B", "U"]:
+                                    landmark_pred_label = "U"
+                                    landmark_conf = max(landmark_conf, 0.88)
+                                elif tip_dist >= 0.42 and landmark_pred_label in ["U", "H", "B", "V"]:
+                                    landmark_pred_label = "V"
+                                    landmark_conf = max(landmark_conf, 0.88)
+
+                landmark_res = {
+                    "pred_label": landmark_pred_label,
+                    "confidence": landmark_conf,
+                    "top5": lm_top5,
+                    "status": "OK",
+                    "model_name": "26-Class Single-Hand MLP",
+                }
+
+                # Run CNN Pathway if RGB frame is available
+                cnn_res = None
+                if rgb_frame is not None:
+                    cnn_res = self.cnn_engine.predict(rgb_frame, multi_hand_landmarks)
+
+                # Fuse Landmark & CNN Pathways
+                fusion_res = self.fusion_engine.fuse(landmark_res, cnn_res, hand_detected=True)
+
+                active_pipeline = "Single-Hand (26 Classes)"
+                hand_status_str = "1 HAND"
 
         # Case C: 2 Hands Detected -> Dual-Hand 20-Class Pipeline (EXP-K-D-ABL 144D)
         else:
@@ -576,6 +631,11 @@ class AlphabetEngine:
 
             c1 = meta["c1"]  # Screen-left hand (21, 3)
             c2 = meta["c2"]  # Screen-right hand (21, 3)
+
+            # Cache 2-hand coordinates and reset hold counter
+            self._prev_c1 = c1.copy()
+            self._prev_c2 = c2.copy()
+            self._dual_hold_counter = 0
 
             landmark_res = self.dual_hand_engine.predict(c1, c2)
             landmark_pred_label = landmark_res.get("pred_label")
@@ -643,7 +703,7 @@ class AlphabetEngine:
             # 2. ISL Class K vs Class T Disambiguation:
             # In ISL, K has passive index finger pointing vertically upward (stem).
             # In T, passive index is horizontal.
-            if landmark_pred_label == "T" and len(c1) >= 21:
+            if self.enable_kt_override and landmark_pred_label == "T" and len(c1) >= 21:
                 idx_tip_y = c1[8, 1]
                 idx_mcp_y = c1[5, 1]
                 idx_tip_x = c1[8, 0]
@@ -656,8 +716,8 @@ class AlphabetEngine:
                     landmark_res["confidence"] = max(landmark_conf, 0.88)
                     landmark_conf = landmark_res["confidence"]
 
-            # 3. Physical validation for B and H to prevent spurious open-hand collapses:
-            if landmark_pred_label in ["B", "H"]:
+            # 3. Physical validation for B and H to prevent spurious open-hand collapses (Configurable):
+            if self.enable_bh_clamp and landmark_pred_label in ["B", "H"]:
                 wrist_dist = float(np.linalg.norm(c1[0] - c2[0]))
                 if wrist_dist > 0.42:
                     landmark_res["confidence"] = round(landmark_conf * 0.3, 4)
@@ -723,6 +783,7 @@ class AlphabetEngine:
 
             if self.consecutive_count >= self.stability_frames:
                 self.stable_letter = self.consecutive_candidate
+                self.last_stable_letter = self.consecutive_candidate
                 time_since_last_emission = now - self.last_emitted_time
                 can_emit = False
 
@@ -802,6 +863,7 @@ class AlphabetEngine:
 
             if self.consecutive_count >= self.stability_frames:
                 self.stable_letter = self.consecutive_candidate
+                self.last_stable_letter = self.consecutive_candidate
                 time_since_last_emission = now - self.last_emitted_time
                 can_emit = False
                 if self.stable_letter == self.last_emitted_letter:
@@ -872,6 +934,10 @@ class AlphabetEngine:
             "raw_letter": self.raw_prediction,
             "raw_confidence": self.raw_confidence,
             "stable_letter": self.stable_letter,
+            "last_stable_letter": self.last_stable_letter,
+            "stability_progress": round(min(1.0, self.consecutive_count / max(1, self.stability_frames)), 2),
+            "consecutive_count": self.consecutive_count,
+            "stability_frames": self.stability_frames,
             "emitted_letter": self.emitted_letter,
             "emission_id": self.emission_counter,
             "state": self.state,

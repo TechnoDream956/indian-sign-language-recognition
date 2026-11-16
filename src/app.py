@@ -18,11 +18,12 @@ import os
 import sys
 import threading
 import time
+import uuid
 import webbrowser
 
 import cv2
 import numpy as np
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, render_template_string, request, session, make_response
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -40,11 +41,31 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 app.config["SECRET_KEY"] = "isl-translator-2025"
 
+# Register Feedback and Continuous Learning Blueprint (v2)
+try:
+    from feedback_learning import feedback_bp
+    app.register_blueprint(feedback_bp)
+except ImportError:
+    from src.feedback_learning import feedback_bp
+    app.register_blueprint(feedback_bp)
+
+# Register Independent Multilingual Translation & Speech Blueprint (v2)
+try:
+    from language_services.api import language_bp
+    app.register_blueprint(language_bp)
+except ImportError:
+    try:
+        from src.language_services.api import language_bp
+        app.register_blueprint(language_bp)
+    except Exception as _lang_bp_err:
+        pass
+
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-User-ID, X-Session-ID, X-Session-Token"
+    response.headers["Access-Control-Expose-Headers"] = "X-Session-Token"
     return response
 
 @app.route("/api/<path:subpath>", methods=["OPTIONS"])
@@ -54,6 +75,8 @@ def options_cors(subpath):
 engine = InferenceEngine(
     camera_index=0,
 )
+_default_local_user_id = f"usr_{uuid.uuid4().hex[:12]}"
+engine.set_session_user_id(_default_local_user_id)
 
 # ------------------------------------------------------------------ #
 #  Routes                                                              #
@@ -61,6 +84,16 @@ engine = InferenceEngine(
 
 @app.route("/")
 def index():
+    if "user_id" not in session:
+        session["user_id"] = engine.get_session_user_id() or _default_local_user_id
+    if "feedback_session_token" not in session:
+        try:
+            from feedback_learning import get_feedback_manager
+            fb_mgr = get_feedback_manager()
+            session["feedback_session_token"] = fb_mgr.privacy_manager.generate_session_token(session["user_id"])
+        except Exception:
+            pass
+
     languages = list(LANGUAGE_DISPLAY_NAMES.keys())
     language_display = LANGUAGE_DISPLAY_NAMES
     native_languages = NATIVE_LANGUAGE_NAMES
@@ -78,47 +111,112 @@ def index():
     )
 
 
+@app.route("/language-test")
+def language_test():
+    """Standalone multilingual translation & neural TTS test interface (no webcam required)."""
+    try:
+        from language_services.test_ui import TEST_PAGE_HTML
+    except ImportError:
+        from src.language_services.test_ui import TEST_PAGE_HTML
+    return render_template_string(TEST_PAGE_HTML)
+
+
 @app.route("/video_feed")
 def video_feed():
     """MJPEG stream — browser renders as live video via <img src='/video_feed'>."""
     def generate():
+        engine._has_video_subscribers = True
         last_frame_id = -1
-        while engine._running:
-            frame_id, frame = engine.wait_for_frame(last_frame_id=last_frame_id, timeout=0.1)
-            if frame is not None and frame_id != last_frame_id:
-                last_frame_id = frame_id
-                yield (
-                    b"--frame\r\n"
-                    b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
-                )
-            elif not engine._running:
-                break
+        try:
+            while engine._running:
+                frame_id, frame = engine.wait_for_frame(last_frame_id=last_frame_id, timeout=0.1)
+                if frame is not None and frame_id != last_frame_id:
+                    last_frame_id = frame_id
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+                    )
+                elif not engine._running:
+                    break
+        finally:
+            engine._has_video_subscribers = False
     return Response(
         generate(),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
 
-@app.route("/events")
+@app.route("/events", methods=["GET", "OPTIONS"])
 def events():
-    """Server-Sent Events stream — pushes prediction state to browser in real-time."""
+    """
+    Authenticated Server-Sent Events stream — pushes real-time prediction state.
+    Requires cryptographically signed session token via 'X-Session-Token' or 'Authorization' header.
+    Rejects unauthorized, missing, or expired tokens with HTTP 401.
+    """
+    if request.method == "OPTIONS":
+        return Response(status=204)
+
     cancel_disconnect_timer()
+
+    # Extract session token strictly from request headers or flask session cookie (never from URL query)
+    req_token = (
+        request.headers.get("X-Session-Token")
+        or request.headers.get("Authorization")
+        or session.get("feedback_session_token")
+    )
+    if req_token and req_token.strip().lower().startswith("bearer "):
+        req_token = req_token.strip()[7:].strip()
+    if req_token:
+        req_token = req_token.strip()
+
+    if not req_token:
+        return jsonify({
+            "ok": False,
+            "error": "Authentication required: Missing session token. Provide 'X-Session-Token' header.",
+        }), 401
+
+    try:
+        from feedback_learning import get_feedback_manager
+        fb_mgr = get_feedback_manager()
+        valid, token_uid, err_msg = fb_mgr.privacy_manager.verify_session_token(req_token)
+        if not valid or not token_uid:
+            return jsonify({
+                "ok": False,
+                "error": f"Unauthorized: {err_msg or 'Invalid session token'}",
+            }), 401
+
+        old_uid = engine.get_session_user_id()
+        engine.set_session_user_id(token_uid)
+        if old_uid and old_uid != token_uid:
+            try:
+                fb_mgr.reassign_snapshots(old_uid, token_uid)
+            except Exception:
+                pass
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": f"Authentication validation failed: {str(e)}",
+        }), 401
+
     def generate():
         last_state = {}
         idle_count = 0
-        while engine._running:
-            state = engine.get_latest_state()
-            if state != last_state:
-                last_state = state
-                data = json.dumps(state)
-                yield f"data: {data}\n\n"
-                idle_count = 0
-            else:
-                idle_count += 1
-                if idle_count >= 15:  # Every ~1.2s when idle
+        try:
+            while engine._running:
+                state = engine.get_latest_state()
+                if state != last_state:
+                    last_state = state
+                    data = json.dumps(state)
+                    yield f"data: {data}\n\n"
                     idle_count = 0
-                    yield ": ping\n\n"
-            time.sleep(0.08)  # ~12 Hz update rate — smooth for text, low CPU
+                else:
+                    idle_count += 1
+                    if idle_count >= 15:  # Every ~1.2s when idle
+                        idle_count = 0
+                        yield ": ping\n\n"
+                time.sleep(0.08)  # ~12 Hz update rate — smooth for text, low CPU
+        except (GeneratorExit, BrokenPipeError, ConnectionResetError):
+            pass
     return Response(
         generate(),
         mimetype="text/event-stream",
@@ -310,6 +408,17 @@ def alphabet_commit():
     return jsonify(engine.alphabet_commit_word())
 
 
+@app.route("/api/alphabet/commit-letter", methods=["POST"])
+def alphabet_commit_letter():
+    """Manually append a single recognized letter to current word buffer."""
+    data = request.get_json(silent=True) or {}
+    letter = data.get("letter", "").strip()
+    if not letter:
+        return jsonify({"ok": False, "error": "No letter provided"}), 400
+    res = engine.alphabet_add_letter(letter)
+    return jsonify(res)
+
+
 @app.route("/api/alphabet/speak", methods=["POST"])
 def alphabet_speak():
     """Speak current sentence/text via TTS (original English or translated)."""
@@ -343,6 +452,31 @@ def tts_voices():
     return jsonify({
         "ok": True,
         "catalog": tts.get_voice_catalog(),
+    })
+
+
+@app.route("/api/tts/speak", methods=["POST"])
+def tts_speak():
+    """
+    Synthesize text to speech using the neural speech adapter if enabled,
+    or instruct the client to use browser Web Speech API fallback.
+    """
+    data = request.get_json(silent=True) or {}
+    text = data.get("text", "")
+    language = data.get("language", data.get("target_lang", "English"))
+    voice_id = data.get("voice_id")
+
+    try:
+        from speech_adapter import get_speech_adapter
+    except ImportError:
+        from src.speech_adapter import get_speech_adapter
+
+    adapter = get_speech_adapter()
+    res = adapter.synthesize(text=text, target_lang=language, voice_id=voice_id)
+
+    return jsonify({
+        "ok": True,
+        **res,
     })
 
 
@@ -424,6 +558,8 @@ def _perform_graceful_shutdown() -> None:
 @app.route("/api/shutdown", methods=["POST"])
 def shutdown_app():
     """Explicit application quit requested by UI."""
+    if engine.is_cloud or os.environ.get("RENDER"):
+        return jsonify({"ok": True, "message": "Cloud session disconnected (shared server preserved)."}), 200
     print("\n[Application Lifecycle] /api/shutdown requested. Halting...", flush=True)
     threading.Thread(target=_perform_graceful_shutdown, daemon=True, name="ShutdownThread").start()
     return jsonify({"ok": True, "message": "Application shutting down and camera released."})
@@ -468,10 +604,20 @@ def healthz():
 @app.route("/api/status")
 def status():
     cancel_disconnect_timer()
-    return jsonify(engine.is_ready()), 200
+    st = engine.is_ready()
+    try:
+        import resource
+        raw_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        rss_mb = round(raw_rss / (1024 * 1024 if sys.platform == "darwin" else 1024), 2)
+    except Exception:
+        rss_mb = 0.0
+    st["memory_rss_mb"] = rss_mb
+    st["active_engines"] = getattr(engine.__class__, "_instance_count", 1)
+    return jsonify(st), 200
 
 
 @app.route("/api/camera/frame", methods=["POST"])
+@app.route("/api/process_frame", methods=["POST"])
 def camera_frame():
     """
     Receive webcam frame from browser client (for cloud deployments or browser webcam).
@@ -518,23 +664,106 @@ def camera_frame():
         res = engine.process_frame(frame, is_mirrored=is_mirrored)
         cancel_disconnect_timer()
 
-        return jsonify({
+        # Safely record prediction snapshot for feedback learning
+        prediction_id = None
+        session_token = None
+        try:
+            from feedback_learning import get_feedback_manager
+            fb_mgr = get_feedback_manager()
+            user_token = request.headers.get("X-Session-Token")
+            auth_user_id = None
+            if user_token:
+                valid, token_uid, _ = fb_mgr.privacy_manager.verify_session_token(user_token)
+                if valid:
+                    auth_user_id = token_uid
+                    session_token = user_token
+            if not auth_user_id:
+                auth_user_id = session.get("user_id") or f"usr_{uuid.uuid4().hex[:12]}"
+                session["user_id"] = auth_user_id
+                session_token = fb_mgr.privacy_manager.generate_session_token(auth_user_id)
+                session["feedback_session_token"] = session_token
+            if hasattr(engine, "set_session_user_id"):
+                engine.set_session_user_id(auth_user_id)
+
+            pred_letter = res.get("fused_prediction") or res.get("pred_label") or res.get("alphabet_stable_letter")
+            if pred_letter and pred_letter not in ("--", "None", ""):
+                landmarks_list = res.get("landmarks", [])
+                if landmarks_list and len(landmarks_list) > 0:
+                    pts = landmarks_list[0].get("points", [])
+                    if len(pts) >= 21:
+                        from alphabet_engine import normalize_hand_landmarks
+                        feats = normalize_hand_landmarks(np.array(pts[:21], dtype=np.float32))
+                        snapshot = fb_mgr.capture_prediction_snapshot(
+                            predicted_alphabet=pred_letter,
+                            confidence_score=float(res.get("fused_confidence") or res.get("confidence") or 0.0),
+                            feature_vector=feats,
+                            raw_landmarks=landmarks_list,
+                            tracking_quality={"score": landmarks_list[0].get("score", 1.0), "hand_count": res.get("alphabet_hand_count", 1)},
+                            metadata={"fusion_mode": res.get("fusion_mode"), "frame_id": res.get("frame_id")},
+                            user_id=auth_user_id,
+                        )
+                        prediction_id = snapshot.prediction_id
+        except Exception:
+            pass
+
+        resp_data = {
             "ok": True,
             "prediction": res.get("pred_label"),
             "confidence": res.get("confidence"),
             "fused_prediction": res.get("fused_prediction"),
             "fused_confidence": res.get("fused_confidence"),
             "fusion_mode": res.get("fusion_mode"),
+            "prediction_id": prediction_id,
+            "session_token": session_token,
             "word": res.get("alphabet_current_word", ""),
             "sentence": res.get("alphabet_sentence", ""),
             "full_text": res.get("alphabet_full_text", ""),
             "translation": res.get("alphabet_translation", ""),
             "hand_detected": res.get("hand_detected", False),
             "hand_count": res.get("alphabet_hand_count", 0),
+            "landmarks": res.get("landmarks", []),
+            "last_stable_letter": res.get("last_stable_letter", "--"),
+            "stability_progress": res.get("stability_progress", 0.0),
+            "frame_id": res.get("frame_id", 0),
+            "processing_time_ms": res.get("processing_time_ms", 0.0),
             "state": res,
-        }), 200
+        }
+        resp = make_response(jsonify(resp_data), 200)
+        if session_token:
+            resp.headers["X-Session-Token"] = session_token
+        return resp
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        app.logger.error("Error processing camera frame: %s", e)
+        return jsonify({"ok": False, "error": "Internal error processing camera frame"}), 500
+
+
+@app.route("/api/translate", methods=["POST"])
+def translate_endpoint():
+    """Translate arbitrary text or current composed sentence into target language."""
+    data = request.get_json(silent=True) or {}
+    text = data.get("text")
+    lang = data.get("language") or engine._state.get("language", "English")
+    if text is None:
+        cur_sent = engine._state.get("alphabet_sentence", "").strip()
+        cur_word = engine._state.get("alphabet_current_word", "").strip()
+        text = (cur_sent + " " + cur_word).strip() if cur_sent else cur_word
+
+    from translation_adapter import get_translation_adapter
+    adapter = get_translation_adapter()
+    res = adapter.translate(text=text, target_lang=lang)
+    trans = res.get("translation", "")
+
+    with engine._lock:
+        engine._state["alphabet_translation"] = trans
+
+    return jsonify({
+        "ok": True,
+        "source": text,
+        "language": lang,
+        "translation": trans,
+        "engine": res.get("engine", "legacy"),
+        "cached": res.get("cached", False),
+    }), 200
 
 
 # ------------------------------------------------------------------ #

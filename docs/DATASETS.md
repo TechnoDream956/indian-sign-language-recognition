@@ -2,74 +2,63 @@
 
 ## Overview
 
-The Indian Sign Language Recognition & Translation application is bundled with pre-trained neural network weights (`models/*.h5`), allowing the production runtime (both the web application and the standalone macOS `.app`) to operate **completely independently of external or local dataset files**. 
+The Indian Sign Language Recognition & Translation application is bundled with pre-trained neural network weights (`models/*.h5`), allowing the production runtime (both the web application and the standalone macOS `.app`) to operate **completely independently of external or local raw dataset files**. 
 
-This document describes the provenance, schemas, collection methodology, and licensing caveats for the training datasets and collection tools.
+This document describes the provenance, schemas, collection methodology, redistribution rights, and licensing caveats for all training datasets and benchmarking subsets used across this project.
 
----
-
-## 1. Dynamic Sign Dataset (Sequence Recognition)
-
-### Target Signs
-- **13-Class Foundational Model (`mopgru_model.h5`):**
-  `Hello`, `Thank You`, `Yes`, `No`, `Please`, `Help`, `Good`, `Bad`, `Food`, `Water`, `Father`, `Mother`, `Friend`.
-- **29-Class Extended Model (`mopgru_model_29class.h5`):**
-  Expands the lexicon to 29 continuous conversational signs covering common greetings, requests, emergency queries, and familial terms.
-
-### Feature Representation
-- **Temporal Depth:** 30 consecutive video frames per sequence sampled at ~25–30 FPS.
-- **Spatial Geometry:** MediaPipe Holistic landmark extraction producing **1,662 features per frame**:
-  - **Pose:** 33 landmarks $\times$ 4 coordinates $(x, y, z, \text{visibility}) = 132$ features
-  - **Face Mesh:** 468 landmarks $\times$ 3 coordinates $(x, y, z) = 1,404$ features
-  - **Left Hand:** 21 landmarks $\times$ 3 coordinates $(x, y, z) = 63$ features
-  - **Right Hand:** 21 landmarks $\times$ 3 coordinates $(x, y, z) = 63$ features
-  - **Total:** $132 + 1,404 + 63 + 63 = 1,662$ coordinates per frame.
-  - **Sequence Tensor Shape:** $(30, 1662)$.
-
-### Data Augmentation & Normalization
-- Coordinate jittering ($\sigma = 0.01$), temporal warping ($\pm 10\%$), and shoulder-width normalization.
-- Stratified splitting: 80% Training, 10% Validation, 10% Test.
+**Project Contributors & Roles:**
+- **Arpit:** Recognition Model Development
+- **Sachin:** Data Collection, Preprocessing & Backend Support
+- **Abhu:** Multilingual Support & TTS
+- **Yash:** Frontend & Deployment
 
 ---
 
-## 2. Static Fingerspelling Alphabet Dataset (Single-Frame Recognition)
+## 1. Dataset Provenance, Counts & Licensing
 
-### Target Classes
-- **26 English Alphabetic Characters (`A` through `Z`):**
-  Full Indian Sign Language fingerspelling representation.
+| Dataset | Modality / Format | Total Samples | Split Distribution | Provenance & Origin | License Status | Redistribution Policy & Model Rights |
+| :--- | :--- | :---: | :--- | :--- | :--- | :--- |
+| **RealSign** | Cropped RGB ($128\times128$) & MediaPipe 3D Landmarks | 1,613 dual-hand samples | • Train: 1,189<br>• Val: 181<br>• Held-Out Test: 243 | Academic ISL research dataset recorded in controlled indoor conditions. | **TODO: confirm** *(Academic download; upstream terms unverified)* | **Raw Assets:** DO NOT REDISTRIBUTE.<br>**Trained Weights:** Upstream dataset licenses are unverified; trained weights are included for educational reproducibility; confirm before making the repository public. |
+| **OpenHands (ISL subset)** | 3D Skeletal Landmarks | 9 held-out test samples | • Test: 9 | OpenHands Sign Language open-source project repository. | **TODO: confirm** *(Permissive open-source; specific terms unverified)* | **Raw Assets:** DO NOT REDISTRIBUTE.<br>**Trained Weights:** Upstream dataset licenses are unverified; trained weights are included for educational reproducibility; confirm before making the repository public. |
+| **Ayesha (ISL Fingerspelling)** | 2D/3D Landmarks & RGB Crops | ~2,500 single-hand samples | • Test: 536 single-hand | Public ISL fingerspelling alphabet collection. | **TODO: confirm** *(Community repository; terms unverified)* | **Raw Assets:** DO NOT REDISTRIBUTE.<br>**Trained Weights:** Upstream dataset licenses are unverified; trained weights are included for educational reproducibility; confirm before making the repository public. |
+| **Project Live Benchmark Recordings** | Landmark JSON & Session Telemetry | Variable (ad-hoc live sessions) | Recorded via `tools/collection/record_live_benchmark_samples.py` | Locally captured by team members for empirical testing. | **MIT License (Project Internal)** | Excluded from git tracking via `.gitignore` (`data/live_benchmark_samples/`). |
 
-### Hand Configuration
-Based on the standard Indian Sign Language fingerspelling system:
-- **Single-Handed Signs:** `C`, `L`, `O`, `U`, `V` (dominant hand only)
-- **Two-Handed Signs:** `A`, `B`, `D`, `E`, `F`, `G`, `H`, `I`, `J`, `K`, `M`, `N`, `P`, `Q`, `R`, `S`, `T`, `W`, `X`, `Y`, `Z` (both hands interacting)
-
-### Feature Representation
-- **Spatial Geometry:** Single frame feature vector of **1,662 dimensions**, formatted identically to the dynamic sign input to ensure uniform pipeline compatibility.
-- **Normalization:** Min-max spatial normalization centered around wrist landmarks to provide scale and translation invariance across different user camera distances.
-
----
-
-## 3. Solo Dual-Hand Collection Suite (`src/collect_dual_hand_alphabet.py`)
-
-To expand the dual-hand alphabet dataset, the project includes an automated collection utility.
-
-### Storage Format:
-- Data directory: `data/phase5p_dual_hand/`
-- Structure:
-  - `<LABEL>/<LABEL>_<INDEX>_<TIMESTAMP>.npy`: Raw numpy array containing 84 normalized coordinates (42 left hand + 42 right hand landmarks).
-  - `metadata.csv`: CSV log tracking each capture event:
-    - Columns: `sample_id`, `label`, `hand_count`, `has_left`, `has_right`, `timestamp`, `filepath`, `status`
+> [!CAUTION]
+> **Redistribution Compliance & Derivative Model Rights:**  
+> The repository ships **frozen model checkpoints (`models/*.h5`) and JSON label maps only** for educational reproducibility. Raw image and video archives (`Dataset.zip`, raw MP4s) are strictly excluded from git tracking.  
+> **Upstream dataset licenses are unverified; trained weights are included for educational reproducibility; confirm before making the repository public.**  
+>
+> **Action Required If Upstream License Forbids Redistribution:**  
+> If an upstream dataset owner indicates that trained weights cannot be distributed, remove all weight files (`models/*.h5`) from the repository and distribute only the preprocessing scripts, feature extraction pipelines, and training recipes (`scripts/train_*.py`). Downstream users can then reproduce weights locally by downloading the raw data directly from upstream sources.
 
 ---
 
-## 4. Attribution & Licensing Caveats
+## 2. Held-Out Evaluation Partitions (Ablation Ground Truth)
 
-| Dataset / Resource | Source / Authors | License / Usage Terms | Notes |
-| :--- | :--- | :--- | :--- |
-| **RealSign Dataset** | Academic research community | Creative Commons CC0 / Open Access | Primary source for hand landmark baselines. |
-| **ISLRTC Guidelines** | Indian Sign Language Research and Training Centre (Govt. of India) | Educational & Research Use | Official standard for Indian Sign Language alphabet and word formations. |
-| **INCLUDE Dataset** | Sridhar et al., ACM Multimedia | Non-commercial academic research | Reference benchmark for large-scale ISL gesture taxonomies. |
-| **MOPGRU Reference Paper** | Subramanian et al., *Scientific Reports* (Nature Portfolio, 2022) | Open Access (CC BY 4.0) | Theoretical architecture for recurrent sequence modeling. |
+All metrics reported in `docs/RESULTS.md` and `docs/DIAGNOSIS.md` derive from strictly held-out test partitions:
 
-> [!IMPORTANT]
-> **Zero Runtime Data Footprint:** Neither `src/app.py` nor `dist/ISL Translator.app` requires raw `.npy` or video files. Pretrained model weights are frozen in `models/`, ensuring full reproducibility, zero bloat in git, and rapid cloning.
+1. **Dual-Hand 20-Class Held-Out Partition (`best_val_model.h5`):**
+   - **Full Partition (`sample_ids_test.npy`):** **252 samples** (243 RealSign + 9 OpenHands).
+   - **RealSign Same-Signer Subset:** **243 samples** (wrist-to-middle-MCP Euclidean normalization). Evaluates 20 target classes: `A, B, D, E, F, G, H, I, K, M, N, P, Q, R, S, T, W, X, Y, Z`.
+   - **OpenHands Subset:** **9 samples** ($L_\infty$ span bounding-box normalization).
+2. **Single-Hand 26-Class Baseline (`alphabet_model_26class.h5`):**
+   - **Held-Out Test Set:** **536 samples** across characters `A`–`Z`.
+3. **RGB Visual CNN Baseline (`cnn_sign_model.h5`):**
+   - **Held-Out Test Set:** **780 cropped RGB frames** ($128\times 128\times 3$) from `Dataset.zip`.
+
+---
+
+## 3. Data Leakage & Domain Shift Audit
+
+Empirically audited via `tools/audit/leakage_audit.py`:
+- **ID Overlap:** **0.0% overlap** across train, validation, and test splits (zero duplicate sample IDs).
+- **Temporal Correlation & Single-Signer Domain Shift:** In `RealSign`, training and held-out test frames were recorded with the **same signer in the same studio environment**. Nearest-neighbor analysis reveals a median Euclidean distance of **0.5492** on 144D features, with 4.5% of test samples within distance $< 0.10$.
+- **Classification:** Strictly designated as **same-signer held-out** everywhere. Offline test accuracy evaluates internal consistency; generalization to novel signers requires multi-signer collection.
+
+---
+
+## 4. Live Data Collection Suite
+
+The repository provides `tools/collection/record_live_benchmark_samples.py` for recording new live multi-signer test sessions:
+- **Output Directory:** `data/live_benchmark_samples/` (git-ignored)
+- **Captured Telemetry:** Synchronized RGB frame crops, raw unmirrored MediaPipe landmarks, mirrored display landmarks, timestamp, and operator labels.

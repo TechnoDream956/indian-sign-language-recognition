@@ -62,6 +62,14 @@ data/phase5p_dual_hand/
 data/phase5/raw/
 data/translation_cache.json
 
+# Runtime Feedback & Language Services Data Caches
+data/feedback/
+data/language_services/
+data/live_benchmark_samples/
+*.db
+*.sqlite
+*.sqlite3
+
 # Temporary files, Logs & Scratch
 logs/
 *.log
@@ -69,3 +77,4 @@ logs/
 scratch/
 .freebuff/
 phase3_experimental_bundle.txt
+FEEDBACK_LEARNING_*.md

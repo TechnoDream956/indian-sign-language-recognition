@@ -6,18 +6,29 @@ This document describes the automated test suite, regression verification proced
 
 ## 1. Test Suite Architecture
 
-The test suite is located in the `tests/` directory and contains **87 automated test cases** covering every layer of the application:
+The test suite is located in the `tests/` directory and contains **235 automated test cases** across 18 specialized test suites covering every layer of the application:
 
-| Test File | Focus Area | Test Count | Key Invariants Verified |
-| :--- | :--- | :---: | :--- |
-| `tests/test_dual_hand_collection.py` | Solo Data Collection Suite | 15 | Countdown transitions (5s), auto-advance upon sample quota, release period enforcement, expected hand configuration validation. |
-| `tests/test_dual_hand_alphabet.py` | Dual-Hand Alphabet Tracking | 13 | Left/right hand landmark coordinate extraction, deterministic ordering, hand count validation, dual-hand vs single-hand letter routing. |
-| `tests/test_alphabet_engine.py` | Alphabet Inference & WordBuffer | 19 | 26-class Dense network inference, debounce cooldown (1.2s), space insertion, backspace, sentence composition state machine. |
-| `tests/test_dual_model_inference.py`| Sequence Inference & Hot-Swapping | 13 | 30-frame sliding FIFO buffer, hot-swapping between 13-class and 29-class models, label encoder mapping, confidence stability. |
-| `tests/test_translator.py` | Multilingual Translation | 11 | Translation into 10 regional Indian languages, language code validation, fallback behavior on network disconnects. |
-| `tests/test_tts_engine.py` | Speech Synthesis Engine | 8 | Native macOS `say` subprocess execution, mute/unmute state, speed and volume controls, fallback engine selection. |
-| `tests/test_web_endpoints.py` | Flask Web Server & SSE Streaming | 8 | Endpoint routing (`/status`, `/set_mode`, `/switch_model`, `/set_language`, `/buffer_action`), SSE formatting, MJPEG stream headers. |
-| **Total** | | **87** | **100% Pass Rate Across All Suites** |
+| Test File | Focus Area | Key Invariants Verified |
+| :--- | :--- | :--- |
+| `tests/test_alphabet_26class_matrix.py` | Confusion Matrix & Evaluation | Matrix generation, per-class sensitivity & precision for 26 classes. |
+| `tests/test_alphabet_accuracy.py` | Model Accuracy Benchmarking | Validates minimum top-1 and top-3 accuracy thresholds on test sets. |
+| `tests/test_alphabet_engine.py` | 26-Class Single-Hand Engine | Model loading, preprocessing, 63D vector normalization, confidence scoring. |
+| `tests/test_alphabet_translation.py` | WordBuffer to Translation | Debounce state machine, space insertion, sentence assembly, translation trigger. |
+| `tests/test_app_packaging_and_lifecycle.py` | Packaging & Port Allocation | Port auto-bind (5001), health check polling, process single-instance mutex. |
+| `tests/test_cloud_camera.py` | Frame Ingestion & SSE | Frame decoding, base64 ingestion, authentication tokens, connection resilience. |
+| `tests/test_dual_hand_alphabet.py` | Dual-Hand 144D Tracking | Deterministic left/right ordering, wrist distance scaling, bimanual routing. |
+| `tests/test_e2e_alphabet_validation.py` | Full Pipeline E2E | Frame input -> perception -> decision fusion -> WordBuffer -> Indic translation. |
+| `tests/test_feedback_continuous_learning.py`| Feedback Learning Pipeline | Prediction registration, explicit user correction, quality filtering, retraining. |
+| `tests/test_feedback_security_privacy.py` | Privacy & Token Auth | HMAC session tokens, data sanitization, pseudonymization, rate limiting. |
+| `tests/test_feedback_storage.py` | SQLite Persistence | Atomic transactions, schema migrations, landmark NPZ serialization. |
+| `tests/test_flask_alphabet_integration.py` | Flask REST API Contracts | Status endpoints, camera controls, language switching, buffer actions. |
+| `tests/test_language_services.py` | Multilingual & Indic TTS | Language registry, transliteration, cache hit/miss, audio generation. |
+| `tests/test_paths_helper.py` | Path Resolution Portability | Dynamic root resolution, resource path helpers, symlink safety. |
+| `tests/test_speech_adapter.py` | Speech Adapter & Fallbacks | Browser Web Speech coordination, native desktop speech fallback. |
+| `tests/test_translation_adapter.py` | Translation Engine Adapter | Multi-language translation caching, dictionary lookup, error resilience. |
+| `tests/test_ui_correction_and_controls.py` | Frontend UI Contracts | Button IDs, modal triggers, state machine, unmirrored canvas rendering. |
+| `tests/benchmark_languages.py` | Translation Latency | Sub-millisecond dictionary lookup, cache throughput. |
+| **Total** | **18 Suites** | **235 Passing Tests (100% Pass Rate)** |
 
 ---
 
@@ -37,11 +48,7 @@ python -m unittest discover -s tests
 
 **Expected Result:**
 ```text
-Loading AlphabetEngine model from: .../models/alphabet_model_26class.h5
-AlphabetEngine initialized with 26 classes.
-.......................................................................................
-----------------------------------------------------------------------
-Ran 87 tests in 0.670s
+Ran 235 tests in ~12.5s
 
 OK
 ```
