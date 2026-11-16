@@ -20,11 +20,11 @@ def copy_existing_figures():
     """Copy high-value existing figures into figures directory."""
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     
-    # UI screenshot
-    ui_src = os.path.join(repo_root, "reserve/historical_reports/prompt_audits/ui_live_running_desktop.png")
+    # UI screenshot: sync from tracked blurred ui_live_running_desktop.png
+    ui_src = os.path.join(FIGURES_DIR, "ui_live_running_desktop.png")
     if os.path.exists(ui_src):
         shutil.copy2(ui_src, os.path.join(FIGURES_DIR, "fig_ui_screenshot.png"))
-        print("Copied UI live running desktop screenshot.")
+        print("Synced UI live running desktop screenshot.")
 
     # Normalization comparison
     norm_src = os.path.join(repo_root, "reserve/historical_reports/reports/dual_hand_investigation/images/normalization_flaw_comparison.png")
