@@ -12,7 +12,11 @@
 
 ## Executive Summary
 
-This document presents the rigorous engineering diagnosis of the Indian Sign Language (ISL) Alphabet (A–Z) recognition pipeline. The objective was to investigate why live real-time webcam predictions were exhibiting weak accuracy despite reported high offline metrics.
+This document presents the engineering diagnosis of the Indian Sign Language (ISL) Alphabet (A–Z) recognition pipeline. The objective was to investigate why live real-time webcam predictions were suspected to be weak despite high offline metrics.
+
+> [!NOTE]
+> **Live Validation: Pending**  
+> Formal live accuracy across novel signers has not been measured yet. We have not measured live accuracy in the field. The findings below document structural coordinate inversions and model mismatches measured on offline held-out test sets; live multi-signer benchmarking will be conducted in a subsequent phase.
 
 Every finding in this report is backed by **measured, reproducible empirical data** obtained by running validation scripts on the actual model checkpoints and held-out partitions. **Zero numbers have been fabricated.**
 
@@ -21,7 +25,7 @@ Every finding in this report is backed by **measured, reproducible empirical dat
 ## 1. Root Causes Ranked by Measured Impact
 
 ### Root Cause 1: Camera Mirroring Coordinate Inversion (Impact: -48.97% to -63.62% Collapse)
-- **Status:** **CONFIRMED & EMPIRICALLY PROVED ACROSS ALL THREE PIPELINE MODELS**
+- **Status:** **CONFIRMED & EMPIRICALLY MEASURED ACROSS ALL THREE PIPELINE MODELS**
 - **Measured Impact on Held-Out Test Partitions:**
   - **Dual-Hand 144D MLP (243 RealSign same-signer held-out samples):**
     - Unmirrored (Training Convention): **78.19%** (Macro F1 = 0.7349)
@@ -127,7 +131,7 @@ Evaluated on the exact same 243 same-signer held-out samples where paired raw la
 > [!IMPORTANT]  
 > **Honest Assessment of Decision Fusion & Offline vs Live Ranking:**  
 > On this same-signer held-out test set, multi-modal decision fusion without the K/T override **equals the geometry branch (78.19%) and is below the CNN alone (82.72%)**. Because the fusion engine defaults to the landmark prior when confidence is split or high, fusion does not improve accuracy.  
-> **Crucial Caveat on CNN Performance:** The RGB CNN was trained on the exact same signer's cropped studio photos under fixed lighting and camera focal length. As documented in our live engineering audit, visual CNNs generalize very poorly live to novel signers with differing skin tones, clothing, and background clutters. Consequently, **the offline ranking showing CNN higher than landmark geometry is an artifact of the single-signer dataset and says nothing about live real-world performance**.
+> **Crucial Caveat on CNN Performance:** The RGB CNN appears to be trained on a single signer's photos under fixed lighting and camera focal length. As suspected from our audit (to be confirmed with live multi-signer data), visual CNNs generalize poorly live to novel signers with differing skin tones, clothing, and background clutters. Consequently, **the offline ranking showing CNN higher than landmark geometry is an artifact of the single-signer dataset and says nothing about live real-world performance**.
 
 ### Agreement vs Disagreement Analysis (Clean Baseline Geometry vs CNN)
 - Evaluated using the **clean baseline geometry model (strictly without K/T override)** against the visual CNN:

@@ -11,6 +11,14 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
 from .xml_helpers import style_table_cell, apply_table_borders
+from .team_config import (
+    TEAM_MEMBERS,
+    MENTOR_NAME,
+    MENTOR_DEPARTMENT,
+    INSTITUTION_NAME,
+    PROJECT_START_DATE,
+    PROJECT_END_DATE,
+)
 
 
 def build_front_matter(doc: Document):
@@ -31,8 +39,8 @@ def build_front_matter(doc: Document):
     p23.text = (
         "We hereby declare that the work which is being presented in the report entitled "
         "“REAL-TIME INDIAN SIGN LANGUAGE ALPHABET RECOGNITION WITH MULTILINGUAL TRANSLATION AND SPEECH OUTPUT”, "
-        "is an authentic record of our own work carried out during the period from [TODO: Start Month Year] to [TODO: End Month Year] "
-        "at School of Computer Science Engineering and Technology, Bennett University, Greater Noida."
+        f"is an authentic record of our own work carried out during the period from {PROJECT_START_DATE} to {PROJECT_END_DATE} "
+        f"at {MENTOR_DEPARTMENT}, {INSTITUTION_NAME}, Greater Noida."
     )
     p23.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     if p23.runs:
@@ -49,7 +57,7 @@ def build_front_matter(doc: Document):
         p24.runs[0].font.name = 'Times New Roman'
         p24.runs[0].font.size = Pt(12)
 
-    # Student Signatures (4 members) - Preserved as TODO placeholders
+    # Student Signatures (4 members) from team_config
     p27 = doc.paragraphs[27]
     p27.text = "Signature of Candidates:"
     p27.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -58,12 +66,7 @@ def build_front_matter(doc: Document):
         p27.runs[0].font.size = Pt(12)
         p27.runs[0].bold = True
 
-    members = [
-        ("Arpit [TODO: Full Name]", "Enroll. No. [TODO: Enrollment No.]"),
-        ("Sachin [TODO: Full Name]", "Enroll. No. [TODO: Enrollment No.]"),
-        ("Abhu [TODO: Full Name]", "Enroll. No. [TODO: Enrollment No.]"),
-        ("Yash [TODO: Full Name]", "Enroll. No. [TODO: Enrollment No.]")
-    ]
+    members = [(m["name"], f"Enroll. No. {m['enrollment']}") for m in TEAM_MEMBERS]
 
     p29 = doc.paragraphs[29]
     p29.text = members[0][0]
@@ -110,8 +113,8 @@ def build_front_matter(doc: Document):
     p42 = doc.paragraphs[42]
     p42.text = (
         "We would like to take this opportunity to express our deepest gratitude to our project mentor, "
-        "[TODO: Faculty Mentor Name, Designation], School of Computer Science Engineering and Technology, Bennett University, "
-        "for guidance, constructive critique, and encouragement throughout the design, development, and rigorous evaluation "
+        f"{MENTOR_NAME}, {MENTOR_DEPARTMENT}, {INSTITUTION_NAME}, "
+        "for guidance, constructive critique, and encouragement throughout the design, development, and evaluation "
         "of this project. Technical insights into computer vision, machine learning architectures, and academic research rigor "
         "were instrumental in guiding our engineering decisions and methodological discipline."
     )
@@ -123,7 +126,7 @@ def build_front_matter(doc: Document):
     p43 = doc.paragraphs[43]
     p43.text = (
         "We also extend our sincere appreciation to the faculty, laboratory staff, and academic administration of "
-        "the School of Computer Science Engineering and Technology at Bennett University for providing the computational "
+        f"the {MENTOR_DEPARTMENT} at {INSTITUTION_NAME} for providing the computational "
         "infrastructure, laboratory resources, and scholarly environment essential for carrying out this research."
     )
     p43.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
@@ -135,7 +138,7 @@ def build_front_matter(doc: Document):
     p44.text = (
         "Finally, we express our heartfelt thanks to our families, peers, and members of the deaf and hard-of-hearing "
         "community whose daily communication challenges inspired this endeavor. Their lived experiences motivated our "
-        "commitment to radical honesty in reporting model performance and building accessible assistive technology."
+        "commitment to thorough honesty in reporting model performance and building accessible assistive technology."
     )
     p44.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     if p44.runs:
@@ -376,32 +379,30 @@ def build_front_matter(doc: Document):
     abstract_text = (
         "Indian Sign Language (ISL) serves as the primary visual-gestural communication medium for over 18 million "
         "deaf and hard-of-hearing individuals across the Indian subcontinent. However, the severe shortage of certified "
-        "human interpreters (fewer than 300 nationwide) creates profound societal, educational, and professional barriers. "
+        "human interpreters creates societal, educational, and professional barriers. "
         "Unlike Western sign systems such as American Sign Language (ASL), ISL is structurally distinguished by extensive "
         "reliance on bimanual (two-handed) fingerspelling, subtle inter-finger contacts, and non-rigid torso coordinate "
         "interactions, rendering standard single-hand vision models ineffective.\n\n"
-        "This project presents the design, implementation, and rigorous forensic evaluation of a standalone, edge-deployable "
-        "real-time ISL alphabet recognition system integrated with on-device neural multilingual translation and speech synthesis. "
-        "The architecture introduces a multi-modal decision fusion framework that couples kinematic skeletal landmarks extracted "
-        "via Google MediaPipe Holistic (21 keypoints per hand) with an RGB appearance Convolutional Neural Network (CNN) operating "
-        "on cropped regions of interest. Hand-presence routing dispatches frames between single-hand invariant multi-layer "
-        "perceptrons (MLPs) and specialized dual-hand spatial feature extractors (up to 144 invariant geometric dimensions). "
+        "This project presents the design, implementation, and empirical evaluation of a standalone, edge-deployable "
+        "real-time ISL alphabet recognition system integrated with multilingual translation and speech synthesis. "
+        "The architecture introduces a multi-modal decision framework that couples kinematic skeletal landmarks extracted "
+        "via Google MediaPipe Hands (21 3D landmarks per hand) with an RGB appearance Convolutional Neural Network (CNN, 128x128x3) "
+        "operating on cropped regions of interest. Hand-presence routing dispatches frames between single-hand invariant multi-layer "
+        "perceptrons (MLPs, 63D) and specialized dual-hand spatial feature extractors (144 invariant geometric dimensions). "
         "A temporal WordBuffer state machine applies dynamic debounce cooldowns (1.2 s) and stability voting to assemble "
         "spelled characters into complete words without physical keyboard interaction.\n\n"
-        "Downstream linguistic accessibility is achieved through completely offline neural machine translation powered by an "
-        "int8-quantized IndicTrans2 model (200M distilled), delivering sentence translation into eight regional Indian languages "
-        "(Hindi, Bengali, Marathi, Tamil, Telugu, Gujarati, Kannada, and Malayalam) in 28–66 ms per sentence on consumer CPU hardware. "
-        "Auditory feedback is synthesized using Meta's Massively Multilingual Speech (MMS-TTS) VITS neural engine, operating at a "
-        "Real-Time Factor of 0.148 (6.7× faster than real-time) with a compact memory footprint under 970 MB.\n\n"
-        "In maintaining radical academic honesty, empirical evaluation reveals a profound disparity between benchmark accuracy "
-        "and real-world webcam deployment. While the dual-hand spatial architecture achieves 78.19% Top-1 accuracy and a Macro F1-score "
-        "of 0.7349 (83.13% Top-1 accuracy and 0.7834 Macro F1 with K/T orientation override) on the held-out same-signer test partition (N=243), "
-        "and 75.79% Top-1 / 0.6683 Macro F1 on the full 252-sample partition, live camera evaluation exhibits severe fragility. "
-        "Comprehensive forensics revealed that live camera mirroring inverts coordinate geometry, causing a catastrophic 48.97% drop "
-        "in accuracy (dropping from 78.19% unmirrored to 29.22% mirrored). Intermittent hand-count drops were resolved via a 2-frame "
-        "hysteresis filter, eliminating 85.7% of pipeline flapping. Additional morphological failure modes, including Class K vs Class T "
-        "disambiguation (statistically validated via McNemar test: chi2=6.722, p=0.0075), anchor defaults for letters B and H, and "
-        "single-signer domain shift, are rigorously documented to establish an actionable engineering roadmap."
+        "Downstream linguistic accessibility supports translation into 10 regional Indian languages via dictionary mapping "
+        "with online fallback, while an int8-quantized IndicTrans2 model is implemented in the codebase as an optional offline "
+        "neural backend. Auditory feedback uses a multi-tier speech fallback chain (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API), "
+        "with Meta's Massively Multilingual Speech (MMS-TTS) implemented as an optional neural service.\n\n"
+        "Offline empirical evaluation was conducted on controlled same-signer held-out test partitions. The clean dual-hand "
+        "spatial MLP achieves 78.19% Top-1 accuracy and 0.7349 Macro F1 on the held-out test partition (N=243), while the paired "
+        "visual CNN achieves 82.72% (0.7565 Macro F1). Multi-modal decision fusion without heuristic overrides matches the geometry "
+        "baseline at 78.19%. A post-hoc K/T orientation override yielded 83.13% Top-1 accuracy (+4.94%), though this heuristic is "
+        "possibly tuned on test data. An engineering diagnosis identified critical pipeline fragility: camera mirroring inverts coordinate "
+        "geometry, causing a 48.97% drop in accuracy (from 78.19% to 29.22%), while intermittent occlusion drops were mitigated using "
+        "a 2-frame temporal hysteresis filter (-85.7% flapping on a synthetic sequence). Formal live accuracy across novel signers remains "
+        "pending future multi-signer benchmark recording."
     )
 
     p139 = doc.paragraphs[139]

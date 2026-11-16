@@ -335,7 +335,7 @@ def build_chapter3(doc: Document):
 
     add_body_p(
         doc,
-        "To establish absolute scientific rigor, all models were evaluated on a controlled, held-out multi-signer test "
+        "All models were evaluated on a controlled, held-out same-signer test "
         "partition (N=252 samples across all 20 dual-hand classes) using immutable frozen checkpoints. In strict adherence "
         "to data governance principles, ground-truth labels were reconciled (correcting six mislabeled OpenHands Subject 4 "
         "frames from Letter I to Letter H). Table 3 details the empirical ablation comparing four distinct feature "
@@ -378,8 +378,8 @@ def build_chapter3(doc: Document):
         "Paired Multi-Modal Fusion, Agreement and Disagreement Analysis: Evaluated on the 243 paired held-out samples, Geometry baseline "
         "achieved 78.19% and CNN alone achieved 82.72%. Multi-modal decision fusion without the K/T override matched the Geometry branch at 78.19% "
         "(0.00% gain) and was below CNN alone (82.72%). With the K/T override, fusion matched Geometry(+KT) at 83.13% (0.00% gain). "
-        "Crucially, the visual CNN was trained on the exact same signer's cropped studio photos under fixed lighting, and generalizes poorly live "
-        "to novel signers per our engineering audit, so this offline ranking says nothing about live real-world performance. "
+        "Crucially, the visual CNN appears to be trained on a single signer's photos under fixed lighting, and is suspected from our audit to generalize poorly live "
+        "to novel signers (to be confirmed with live multi-signer data), so this offline ranking says nothing about live real-world performance. "
         "Evaluated strictly using the clean baseline geometry (WITHOUT K/T override) against CNN, the two branches agreed on 186 out of "
         "243 samples (76.54%), achieving 100.0% accuracy on this agreement subset (186/186). On the 57 samples where the branches disagreed (23.46%), "
         "they cannot both be correct: Geometry was correct on 4 samples (7.02%), CNN was correct on 15 samples (26.32%), and neither was correct "
@@ -392,11 +392,11 @@ def build_chapter3(doc: Document):
     insert_image_centered(doc, os.path.join(FIGURES_DIR, "fig8_benchmark_ablation.png"), width_inches=6.0)
     add_figure_caption(doc, 8, "Reconciled Held-Out Benchmark Performance Across Dual-Hand Feature Architectures")
 
-    # Radical Honesty & Failure Diagnostics
+    # Pipeline Fragility & Diagnostic Analysis
     add_body_p(
         doc,
-        "Radical Honesty on Live Webcam Performance: Despite achieving 78.19% baseline accuracy (83.13% with K/T override) "
-        "on the held-out same-signer test split, live evaluation revealed profound fragility. Rigorous empirical diagnosis "
+        "Pipeline Fragility & Diagnostic Analysis: Despite achieving 78.19% baseline accuracy (83.13% with K/T override) "
+        "on the held-out same-signer test split, initial live webcam testing revealed pipeline fragility. An engineering diagnosis "
         "uncovered two primary root causes: (1) Camera Mirroring Inversion: training images are third-person frontal photos, "
         "whereas unadjusted selfie webcams invert horizontal coordinates, causing accuracy to collapse from 78.19% to 29.22% "
         "(-48.97% drop); (2) Hand Occlusion Drops: physical occlusion during signs like B, D, P dropped hand-count from 2 to 1, "
@@ -454,29 +454,40 @@ def build_chapter3(doc: Document):
     # Runtime Benchmarks (Table 5)
     add_body_p(
         doc,
-        "To measure edge performance, exhaustive latency and resource profiling was conducted across all subsystems. "
-        "As detailed in Table 5, the entire pipeline executes with sub-70 ms translation latency and a 0.148 Real-Time Factor "
-        "for speech synthesis, while maintaining a peak resident memory footprint under 970 MB."
+        "To measure edge performance, exhaustive latency and resource profiling was conducted on Apple Silicon M2 (CPU) "
+        "using src/benchmark_latency.py. As detailed in Table 5, the full end-to-end vision pipeline (including camera ingestion, "
+        "MediaPipe Hands tracking, coordinate normalization, dual-hand MLP inference, CNN crop classification, decision fusion, "
+        "and OpenCV rendering) achieves an average throughput of 22.6 FPS (44.16 ms mean latency, 39.99 ms median) on active dual-hand frames, "
+        "enabling responsive real-time interaction. Default translation uses instantaneous local dictionary mapping (0.001 ms), while "
+        "IndicTrans2 and Meta MMS-TTS are implemented in src/language_services as optional offline neural extensions."
     )
 
-    add_table_caption(doc, 5, "Real-Time Latency, Memory Footprint, and Runtime Resource Profiling")
-    table5 = doc.add_table(rows=6, cols=5)
-    headers5 = ["Subsystem Component", "Underlying Technology / Model", "Mean Execution Latency", "Throughput / RTF", "Peak Resident RAM"]
+    add_table_caption(doc, 5, "Measured Hardware Latency Benchmarks on Apple Silicon M2 (CPU)")
+    table5 = doc.add_table(rows=7, cols=5)
+    headers5 = ["Pipeline Stage / Component", "Technology / Architecture", "Mean Execution Latency", "Throughput / RTF", "Memory Footprint"]
     for idx, h in enumerate(headers5):
         table5.rows[0].cells[idx].text = h
 
     table5_data = [
-        ("Perception & Landmark Tracking", "MediaPipe Holistic (CPU Graph)", "18.4 ms / frame", "26.9 FPS", "165 MB"),
-        ("Multi-Modal Decision Fusion", "144D MLP + 64x64 CNN (Keras)", "2.6 ms / frame", "380 FPS", "95 MB"),
-        ("WordBuffer Debounce Engine", "Temporal State Machine (Python)", "0.1 ms / frame", "> 5,000 FPS", "12 MB"),
-        ("Indic Translation Engine", "IndicTrans2 200M ONNX int8", "42.8 ms / sentence", "23.4 sentences/s", "340 MB"),
-        ("Neural Speech Synthesis (TTS)", "Meta MMS-TTS VITS (PyTorch)", "112.5 ms (for 0.76s audio)", "RTF: 0.148 (6.7x real-time)", "445 MB")
+        ("Full Pipeline (Active Dual-Hand)", "InferenceEngine.process_frame (CPU)", "44.16 ms / frame (39.99 ms median)", "22.6 FPS", "185 MB"),
+        ("Dual-Hand Landmark Engine", "144D Features + MLP (20 classes)", "2.91 ms / inference", "343.1 FPS", "95 MB"),
+        ("Visual CNN Engine", "128x128x3 Crop + Conv2D (Keras)", "9.91 ms / inference", "100.9 FPS", "110 MB"),
+        ("Multi-Modal Decision Fusion", "Confidence Arbitration (Python)", "< 0.01 ms / frame", "> 600,000 FPS", "< 1 MB"),
+        ("Default Translation Engine", "Offline Dictionary Mapping (Python)", "0.001 ms / phrase", "> 10,000 phrases/s", "5 MB"),
+        ("Optional Neural NMT & TTS*", "IndicTrans2 (42.8ms) & MMS-TTS (112.5ms)", "Research extensions in src/language_services", "RTF: 0.148 (MMS)", "785 MB (Combined)")
     ]
 
     for r_idx, row in enumerate(table5_data, start=1):
         for c_idx, val in enumerate(row):
             table5.rows[r_idx].cells[c_idx].text = val
 
-    format_academic_table(table5, col_widths=[1.6, 1.8, 1.4, 1.2, 1.0])
+    format_academic_table(table5, col_widths=[1.7, 1.8, 1.5, 1.0, 1.0])
+
+    add_body_p(
+        doc,
+        "*Note on Optional Neural Services: IndicTrans2 and Meta MMS-TTS are implemented in src/language_services/neural_translator.py "
+        "and src/language_services/neural_tts.py as optional offline research modules. The default production pipeline uses local dictionary "
+        "translation and the multi-tier speech fallback engine (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API)."
+    )
 
     print("Chapter 3 generated successfully.")

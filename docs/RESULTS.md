@@ -69,7 +69,7 @@ Evaluated on the exact same 243 same-signer held-out samples where paired raw la
 > [!IMPORTANT]  
 > **Honest Assessment of Decision Fusion & Offline vs Live Ranking:**  
 > On this same-signer held-out test set, multi-modal decision fusion without the K/T override **equals the geometry branch (78.19%) and is below the CNN alone (82.72%)**. Because the fusion engine defaults to the landmark prior when confidence is split or high, fusion does not improve accuracy.  
-> **Crucial Caveat on CNN Performance:** The RGB CNN was trained on the exact same signer's cropped studio photos under fixed lighting and camera focal length. As documented in our live engineering audit (`docs/DIAGNOSIS.md`), visual CNNs generalize very poorly live to novel signers with differing skin tones, clothing, and background clutters. Consequently, **the offline ranking showing CNN higher than landmark geometry is an artifact of the single-signer dataset and says nothing about live real-world performance**.
+> **Crucial Caveat on CNN Performance:** The RGB CNN appears to be trained on a single signer's photos under fixed lighting and camera focal length. As suspected from our audit (to be confirmed with live multi-signer data), visual CNNs generalize poorly live to novel signers with differing skin tones, clothing, and background clutters. Consequently, **the offline ranking showing CNN higher than landmark geometry is an artifact of the single-signer dataset and says nothing about live real-world performance**.
 
 ### Agreement vs Disagreement Breakdown (Clean Baseline Geometry vs CNN)
 
@@ -180,6 +180,8 @@ Measured on **Apple Silicon M2 (CPU)** using `src/benchmark_latency.py`:
    - Incorporate diverse signers with variable hand dimensions, joint elasticity, and skin tones to overcome same-signer over-reliance.
 3. **Auditory Verification:**  
    - Conduct structured human listening tests across all regional Indic speech output tiers.
+4. **Live Validation (Pending):**  
+   - Formal live accuracy has not been measured yet. Multi-signer live data will be recorded using `tools/collection/record_live_benchmark_samples.py`, and empirical live accuracy numbers will be added once collection is complete.
 
 ---
 

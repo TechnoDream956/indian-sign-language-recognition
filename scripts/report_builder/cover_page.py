@@ -5,6 +5,7 @@ Updates the cover page in-place while preserving the Bennett University logo dra
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from .team_config import TEAM_MEMBERS, COVER_DATE
 
 
 def build_cover_page(doc: Document):
@@ -37,12 +38,10 @@ def build_cover_page(doc: Document):
         p2.runs[0].font.size = Pt(12)
         p2.runs[0].bold = True
 
-    # Student Names & Enrollment (4 members) - Preserved as TODO placeholders
+    # Student Names & Enrollment (4 members) from team_config
     students = [
-        "ARPIT [TODO: Full Name] (Enrollment No. [TODO: Enrollment No.])",
-        "SACHIN [TODO: Full Name] (Enrollment No. [TODO: Enrollment No.])",
-        "ABHU [TODO: Full Name] (Enrollment No. [TODO: Enrollment No.])",
-        "YASH [TODO: Full Name] (Enrollment No. [TODO: Enrollment No.])"
+        f"{m['name'].upper()} (Enrollment No. {m['enrollment']})"
+        for m in TEAM_MEMBERS
     ]
 
     p5 = doc.paragraphs[5]
@@ -105,7 +104,7 @@ def build_cover_page(doc: Document):
         p17.runs[0].bold = True
 
     p19 = doc.paragraphs[19]
-    p19.text = "\t[TODO: Month, Year]"
+    p19.text = f"\t{COVER_DATE}"
     p19.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if p19.runs:
         p19.runs[0].font.name = 'Times New Roman'

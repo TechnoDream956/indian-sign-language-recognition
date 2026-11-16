@@ -5,6 +5,7 @@ Builds docs/report/ISL_Alphabet_Recognition_Project_Report.docx from the officia
 
 import os
 import sys
+import subprocess
 import zipfile
 from docx import Document
 
@@ -114,6 +115,26 @@ def main():
 
     # Verify XML cleanliness
     verify_xml_cleanliness(OUTPUT_PATH)
+
+    # 7. Export PDF Copy via Microsoft Word
+    pdf_path = OUTPUT_PATH.replace(".docx", ".pdf")
+    print(f"\n[Step 7/7] Generating PDF Copy: {pdf_path}...")
+    try:
+        script = f'''
+        tell application "Microsoft Word"
+            open POSIX file "{OUTPUT_PATH}"
+            set activeDoc to active document
+            save as activeDoc file name "{pdf_path}" file format format PDF
+            close activeDoc saving no
+        end tell
+        '''
+        res = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=30)
+        if res.returncode == 0 and os.path.exists(pdf_path):
+            print(f"SUCCESS: Generated PDF report ({os.path.getsize(pdf_path):,} bytes).")
+        else:
+            print(f"WARNING: PDF export returned {res.returncode}: {res.stderr.strip()}")
+    except Exception as e:
+        print(f"WARNING: PDF conversion failed: {e}")
 
     print("\n" + "=" * 70)
     print("Report Generation Complete!")

@@ -34,7 +34,7 @@
 - [System Architecture](#-system-architecture)
 - [Key Features](#-key-features)
 - [Model Hierarchy & Performance (Same-Signer Held-Out)](#-model-hierarchy--performance-same-signer-held-out)
-- [ML Engineering Diagnosis & Radical Honesty on Live Performance](#-ml-engineering-diagnosis--radical-honesty-on-live-performance)
+- [ML Engineering Diagnosis of Pipeline Fragility](#-ml-engineering-diagnosis-of-pipeline-fragility)
 - [Hardware Latency Benchmarks](#-hardware-latency-benchmarks)
 - [Interface Walkthrough & Visual Tour](#-interface-walkthrough--visual-tour)
 - [Technology Stack](#-technology-stack)
@@ -221,7 +221,7 @@ To maintain rigorous scientific standards, all model performance metrics are eva
 | **Dual-Hand (+ K/T Override)** | Deep MLP + Heuristic (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **83.13%** | **0.7834** | *Possibly tuned on test data, not a clean estimate* |
 | **Paired Decision Fusion (+ K/T)** | Landmark Prior + CNN + Heuristic | **20** Bimanual | Paired Same-Signer Subset (N=243) | **83.13%** | **0.7834** | *Matches Geometry (+KT) alone (0% gain)* |
 
-*\*Decision Fusion Honesty: Multi-modal decision fusion without the K/T override **equals the geometry branch (78.19%) and is below the CNN alone (82.72%)** on this same-signer set (with K/T override: 83.13% fused vs 83.13% Geometry+KT). Crucially, the RGB CNN was trained on the exact same signer's cropped photos under fixed lighting, and generalizes poorly live to novel signers per our audit, so **this offline ranking says nothing about live real-world performance**.*  
+*\*Decision Fusion Honesty: Multi-modal decision fusion without the K/T override **equals the geometry branch (78.19%) and is below the CNN alone (82.72%)** on this same-signer set (with K/T override: 83.13% fused vs 83.13% Geometry+KT). Crucially, the RGB CNN appears to be trained on a single signer's photos under fixed lighting, and is suspected from our audit to generalize poorly live to novel signers (to be confirmed with live multi-signer data), so **this offline ranking says nothing about live real-world performance**.*  
 *\*Clean Agreement Analysis: Evaluated strictly using the clean baseline geometry (WITHOUT K/T override) against CNN. When branches AGREE (186 of 243, 76.54%), accuracy is 100.0% (186/186). When branches DISAGREE (57 of 243, 23.46%), Geometry is right on 4 (7.02%), CNN on 15 (26.32%), and NEITHER is right on 38 (66.67%). On de-duplicated data (N=232): 175 agree (100% acc), 57 disagree (Geom right 4, CNN right 15, Neither right 38).*  
 *\*Separate Reference (K/T Override, possibly tuned on test data): The orientation threshold (`dy > 0.08 and dy > 1.2 * dx`) was formulated by inspecting Class K $\to$ T errors on this held-out set; this +4.94% gain is **possibly tuned on test data, not a clean estimate**, and the associated McNemar p-value is methodologically invalid. Post-hoc override flips 12 Class T predictions to K, artificially shifting 12 disagreement samples into agreement (198 agree / 45 disagree: Geom right 4, CNN right 3, Neither right 38).*  
 *\*Near-Duplicate Check: Removing the 4.5% near-duplicate samples (1-NN distance < 0.10, N=232) yields 77.16% baseline, 81.90% CNN alone, 77.16% fused without K/T, and 82.33% with K/T override, confirming stability.*
@@ -233,9 +233,13 @@ To maintain rigorous scientific standards, all model performance metrics are eva
 
 ---
 
-## 🔍 ML Engineering Diagnosis & Radical Honesty on Live Performance
+## 🔍 ML Engineering Diagnosis of Pipeline Fragility
 
-While offline evaluation on controlled held-out splits exhibits high accuracy (78%–83%), live real-time webcam recognition was observed to be noticeably weaker in initial tests. A rigorous engineering diagnosis (`docs/DIAGNOSIS.md`) confirmed three distinct root causes backed by measured empirical data:
+While offline evaluation on controlled held-out splits exhibits high accuracy (78%–83%), live real-time webcam recognition was observed to be noticeably weaker in initial tests. An engineering diagnosis (`docs/DIAGNOSIS.md`) investigated three distinct root causes backed by measured empirical data:
+
+> [!NOTE]
+> **Live Validation: Pending**  
+> Formal live accuracy across novel signers has not been measured yet. We will record multi-signer live benchmark data using `tools/collection/record_live_benchmark_samples.py` and document live accuracy metrics once multi-signer collection is complete.
 
 1. **Camera Mirroring Coordinate Collapse (-48.97% Accuracy Drop):**  
    - *Finding:* Training datasets (`RealSign`, `OpenHands`) consist of third-person frontal images (observer perspective). When a live application flips webcam frames (`cv2.flip(frame, 1)`) for a natural "selfie mirror" view without transforming coordinates back, coordinate geometry is inverted.
@@ -703,6 +707,7 @@ flowchart LR
 - [ ] **Phase 7: Human-in-the-Loop Active Learning (Planned)** — Opt-in user correction capture for iterative model fine-tuning and signer personalization.
 
 ### Hypotheses to Test on Live Multi-Signer Data
+- **Live Validation (Pending):** Formal live accuracy has not been measured yet. We will record multi-signer live data using `tools/collection/record_live_benchmark_samples.py` and report live accuracy once collection is complete.
 - **Disagreement-Gated Uncertainty (Hypothesis):** Under clean baseline evaluation, when landmark geometry and visual CNN branches disagree (57 of 243 samples), neither branch is correct 66.67% of the time (38/57; 84.4% or 38/45 under the K/T override). Displaying an explicit "Uncertain / Re-sign" state when branches diverge could suppress spurious transitions in live operation. **This is a hypothesis to be tested on live multi-signer data, not an established result.**
 - **Multi-Signer Robustness:** Training across multiple diverse signers to eliminate the single-signer intra-recording bias present in RealSign.
 - **Auditory Verification:** Completing human ear listening audits for all 10 languages across all deployed speaker environments.

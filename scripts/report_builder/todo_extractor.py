@@ -54,7 +54,7 @@ def extract_todos(doc: Document):
             f.write("| **PASS** | Team Members | Arpit Sehrawat, Sachin Sharma, Abhu Rai, Yash Upadhyay |\n")
             f.write("| **PASS** | Faculty Mentor | Dr. Reshu Chaudhary, School of CSET, Bennett University |\n")
             f.write("| **PASS** | Benchmark Metrics | Reconciled held-out benchmark (243 same-signer @ 78.19% / 83.13% K/T override, full 252 @ 75.79%) |\n")
-            f.write("| **PASS** | Citations | 11 peer-reviewed publications with active DOIs |\n")
+            f.write("| **PASS** | Citations | 10 verified peer-reviewed publications and preprints |\n")
             f.write("| **PASS** | Design Diagrams | Figures 1–10 embedded in high resolution (300 DPI) |\n")
         else:
             f.write(f"### Found {len(todos)} Yellow-Highlighted Placeholders\n\n")

@@ -562,8 +562,8 @@ def generate_benchmark_comparison_chart():
         'Config D-Min\n(140D Baseline)',
         'Config D-Ablation\n(144D Bilateral)'
     ]
-    accuracy = [77.78, 76.98, 77.38, 78.17]
-    macro_f1 = [70.75, 68.91, 69.20, 72.65]
+    accuracy = [77.78, 76.98, 77.38, 78.19]
+    macro_f1 = [70.75, 68.91, 69.20, 73.49]
 
     x = range(len(models))
     w = 0.35

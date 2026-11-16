@@ -44,12 +44,12 @@ def build_chapter2(doc: Document):
         table1.rows[0].cells[idx].text = h
 
     goals_data = [
-        ("G-01", "Kinematic Perception", "Extract 3D anatomical skeletal landmarks from live webcam streams using MediaPipe Holistic.", ">= 20 FPS on commodity CPU; 543 spatial keypoints extracted with < 35 ms per-frame latency."),
-        ("G-02", "Alphabet Recognition", "Accurately classify static and dynamic ISL fingerspelling gestures across letters A–Z.", ">= 75% overall accuracy on held-out multi-signer benchmark partition; support both 1-hand & 2-hand signs."),
-        ("G-03", "Decision Fusion & Gating", "Fuse geometric skeletal landmarks with RGB appearance CNN features; filter transitional noise.", "W_geom=0.60, W_cnn=0.40; +0.15 agreement bonus; eliminate false-positive transitional triggers."),
+        ("G-01", "Kinematic Perception", "Extract 3D anatomical skeletal landmarks from live webcam streams using MediaPipe Hands.", ">= 20 FPS on commodity CPU; 21 3D landmarks per hand extracted with < 20 ms per-frame latency."),
+        ("G-02", "Alphabet Recognition", "Accurately classify static and dynamic ISL fingerspelling gestures across letters A–Z.", ">= 75% overall accuracy on held-out same-signer benchmark partition; support both 1-hand & 2-hand signs."),
+        ("G-03", "Decision Fusion & Gating", "Fuse geometric skeletal landmarks with RGB appearance CNN features; filter transitional noise.", "W_geom=0.65, W_cnn=0.35; +0.10 agreement bonus; confidence threshold 0.50."),
         ("G-04", "Temporal Smoothing", "Implement an intelligent WordBuffer state machine with debouncing to assemble words hands-free.", "Cooldown debounce period of 1.2 s; 5-frame stability confirmation threshold; backspace & clear gestures."),
-        ("G-05", "Multilingual NMT", "Translate assembled English phrases into 8 Indian scheduled languages completely offline.", "< 70 ms per sentence latency using IndicTrans2 ONNX int8; zero external cloud API dependency."),
-        ("G-06", "Neural Speech Output", "Synthesize natural, audible speech corresponding to translated regional text.", "Real-Time Factor (RTF) < 0.25 using Meta MMS-TTS VITS engine; peak memory footprint < 1.0 GB RAM.")
+        ("G-05", "Multilingual Translation", "Translate assembled English phrases into 10 Indian regional languages with offline dictionary mapping.", "< 5 ms local dictionary lookup, zero cloud dependency for core phrases; optional IndicTrans2 neural module."),
+        ("G-06", "Speech Output", "Synthesize audible speech corresponding to translated regional text using multi-tier fallback.", "Sub-second response using pyttsx3, Edge-TTS, gTTS, or browser Web Speech API; optional Meta MMS-TTS module.")
     ]
 
     for r_idx, row in enumerate(goals_data, start=1):
@@ -82,12 +82,12 @@ def build_chapter2(doc: Document):
 
     add_body_p(
         doc,
-        "In a landmark survey, Adaloglou et al. (2022) conducted an exhaustive comparative study on deep learning-based SLR across "
+        "In a comprehensive comparative study, Adaloglou et al. (2022) evaluated deep learning-based SLR across "
         "RGB, optical flow, and skeletal modalities. Their findings confirmed that while 3D Convolutional Networks (such as I3D) "
         "capture fine-grained appearance, they suffer from extreme computational complexity (>100 GFLOPs), precluding real-time "
         "local CPU execution. Skeletal graph networks and multi-layer perceptrons (MLPs) operating on pre-extracted landmarks "
         "provided a superior trade-off, reducing model parameters by two orders of magnitude while preserving kinematic trajectory. "
-        "Similarly, Rastgoo et al. (2021) and Koller et al. (2020) emphasized that the primary failure mode of skeletal SLR is "
+        "Similarly, Rastgoo et al. (2021) and Koller (2020) emphasized that the primary failure mode of skeletal SLR is "
         "the loss of inter-finger contact semantics and camera perspective distortion, which necessitates multi-modal fusion "
         "with localized RGB visual crops."
     )
@@ -96,18 +96,19 @@ def build_chapter2(doc: Document):
         doc,
         "Regarding the linguistic translation layer, sign language machine translation (SLMT) has historically treated sign tokens "
         "as raw text glosses. Camgoz et al. (2018) pioneered neural sign language translation using attentional sequence-to-sequence "
-        "models. However, translating English tokens into regional Indian languages presents severe grammatical challenges, "
+        "models. However, translating English tokens into regional Indian languages presents grammatical challenges, "
         "including Subject-Object-Verb (SOV) sentence structuring and rich agglutinative morphology. Recent state-of-the-art work "
         "by Gala et al. (2023) introduced IndicTrans2, an open-source Transformer model supporting all 22 scheduled Indian languages. "
-        "By utilizing the 200M distilled int8-quantized ONNX variant of IndicTrans2, our platform achieves high-accuracy neural "
-        "translation entirely on edge devices. Furthermore, Meta's Massively Multilingual Speech (MMS) project by Pratap et al. (2024), "
-        "leveraging the Variational Inference with adversarial learning for end-to-end Text-to-Speech (VITS) architecture (Kim et al., 2021), "
-        "enables neural waveform generation across Indian regional languages without external commercial APIs."
+        "By utilizing the 200M distilled int8-quantized ONNX variant of IndicTrans2 as an optional offline module alongside local dictionary "
+        "mapping, our platform enables accessible regional translation. Furthermore, speech synthesis is structured with a resilient "
+        "multi-tier fallback chain (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API), with Meta's Massively Multilingual Speech (MMS-TTS) "
+        "project by Pratap et al. (2024), utilizing the VITS architecture (Kim et al., 2021), implemented in the codebase as an optional "
+        "neural waveform generation research service."
     )
 
     # Table 2: Comparative Literature Review
     add_table_caption(doc, 2, "Comparative Literature Review of State-of-the-Art ISL Recognition Systems")
-    table2 = doc.add_table(rows=8, cols=6)
+    table2 = doc.add_table(rows=7, cols=6)
     headers2 = ["Author & Year", "Methodology / Architecture", "Input Modality", "Target Vocabulary", "Reported Performance", "Key Limitations & Gaps"]
     for idx, h in enumerate(headers2):
         table2.rows[0].cells[idx].text = h
@@ -115,11 +116,10 @@ def build_chapter2(doc: Document):
     lit_data = [
         ("Subramanian et al. (2022)", "MediaPipe Holistic + Gated Recurrent Unit (MoP-GRU)", "RGB Camera (1662 Skeletal Landmarks)", "13 Dynamic ISL Words", "98.5% on isolated train/test split", "Evaluated on single signer; no fingerspelling alphabet; no translation/speech."),
         ("Adaloglou et al. (2022)", "Comparative 3D-CNN (I3D, ResNet3D) vs Skeletal GCN", "RGB Video & 2D/3D Landmarks", "Continuous Sign Glosses", "Top-1 Acc: 78.4% (I3D), 72.1% (GCN)", "Severe computational overhead; requires discrete high-end GPUs; unusable on CPU."),
-        ("Joy et al. (2022)", "MediaPipe Hands + Random Forest / Dense MLP", "Monocular RGB (Single Hand)", "26 English Letters (ASL/ISL)", "89.2% on synthetic controlled set", "Single-hand only; completely ignores two-handed ISL letters; high occlusion errors."),
         ("Gala et al. (2023)", "IndicTrans2: 200M Distilled Quantized Transformer", "Text Token Sequences (En -> Indic)", "22 Scheduled Indian Languages", "BLEU: 34.2 (En->Hi), 28.5 (En->Ta)", "Text-to-text only; requires tight edge quantization (int8) to run locally on CPU."),
         ("Pratap et al. (2024)", "Meta MMS-TTS: VITS End-to-End Neural Speech", "Phonemic / Text Sequences", "1,000+ Global Languages", "MOS: 4.12; Latency < 60 ms", "Requires PyTorch/SafeTensors runtime optimization and audio buffering for low latency."),
         ("Camgoz et al. (2018)", "Attentive Encoder-Decoder Seq2Seq Gloss Translation", "Continuous Video Frames", "German Sign Language (PHOENIX)", "BLEU-4: 18.13", "Gloss-level vocabulary; struggles with out-of-vocabulary words and names; cloud-bound."),
-        ("This Research (2026)", "Dual-Branch Multi-Modal (144D Invariant MLP + RGB CNN) + WordBuffer + IndicTrans2 + Multi-Tier TTS", "Webcam RGB + 543 Holistic Landmarks + Crop", "26 ISL Letters (1-Hand & 2-Hand) -> 10 Languages + Speech", "78.19% Acc (83.13% with K/T override) / 0.7349 Macro F1 (Held-Out Same-Signer)", "Identified live webcam mirroring geometry collapse (-48.97%), added 2-frame hysteresis, and multi-tier speech fallback.")
+        ("This Research (2026)", "Dual-Branch Multi-Modal (144D Invariant MLP + 128x128 RGB CNN) + WordBuffer + Dictionary / IndicTrans2 + Multi-Tier TTS", "Webcam RGB + MediaPipe Hands Landmarks (21 per hand) + 128x128 Crop", "26 ISL Letters (1-Hand & 2-Hand) -> 10 Regional Languages + Speech", "78.19% Acc (83.13% with K/T override) / 0.7349 Macro F1 (Held-Out Same-Signer)", "Live multi-signer accuracy pending; camera mirroring coordinate drop (-48.97%); 2-frame hysteresis evaluated on synthetic sequence.")
     ]
 
     for r_idx, row in enumerate(lit_data, start=1):

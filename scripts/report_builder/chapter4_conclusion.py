@@ -17,12 +17,12 @@ def build_chapter4(doc: Document):
     add_body_p(
         doc,
         "The overarching vision of this project was to formulate an accessible, low-cost, non-invasive assistive technology "
-        "capable of breaking down the profound communication barrier separating India's 18 million deaf citizens from the hearing "
-        "majority. By recognizing that certified human interpreters are unattainable for daily interactions (<300 nationwide), "
+        "capable of breaking down the significant communication barrier separating India's 18 million deaf citizens from the hearing "
+        "majority. By recognizing that certified human interpreters are scarce for daily interactions, "
         "our goal was to eliminate reliance on expensive, cumbersome wearable sensors (data gloves) and latency-prone, "
         "privacy-compromising cloud APIs. We envisioned a fully local, edge-deployable pipeline running on commodity consumer "
         "hardware that translates real-time Indian Sign Language gestures into stabilized text, converts phrases into regional "
-        "Indian languages, and speaks aloud through neural audio synthesis."
+        "Indian languages, and speaks aloud through multi-tier speech synthesis."
     )
 
     add_body_p(
@@ -47,39 +47,38 @@ def build_chapter4(doc: Document):
 
     add_bullet_p(
         doc,
-        "A multi-modal perception architecture that extracts 543 spatial landmarks via MediaPipe Holistic and cropped 64x64x3 "
-        "RGB appearance regions at 22–27 FPS. Includes a dynamic hand-presence router dispatching to single-hand 63D MLPs or "
+        "A multi-modal perception architecture that extracts 3D skeletal landmarks via MediaPipe Hands (21 per hand) and cropped 128x128x3 "
+        "RGB appearance regions at approximately 22.6 FPS on active dual-hand frames. Includes a dynamic hand-presence router dispatching to single-hand 63D MLPs or "
         "dual-hand 144D bilateral invariant MLPs.",
         bold_prefix="1. Multi-Modal Dual-Branch Vision Pipeline: "
     )
 
     add_bullet_p(
         doc,
-        "A confidence-aware fusion engine that synthesizes geometric and appearance probability vectors (W_geom=0.60, W_cnn=0.40) "
-        "with a +0.15 agreement bonus, coupled with a WordBuffer state machine featuring 1.2 s debouncing, 5-frame stability confirmation, "
+        "A confidence-aware fusion engine that synthesizes geometric and appearance probability vectors (W_geom=0.65, W_cnn=0.35) "
+        "with a +0.10 agreement bonus, coupled with a WordBuffer state machine featuring 1.2 s debouncing, 5-frame stability confirmation, "
         "and hands-free space, backspace, and clear controls.",
         bold_prefix="2. Confidence Fusion & WordBuffer Debouncing: "
     )
 
     add_bullet_p(
         doc,
-        "A completely offline, on-device translation subsystem powered by the 200M distilled int8-quantized IndicTrans2 ONNX model, "
-        "translating English phrases into eight scheduled Indian languages (Hindi, Bengali, Marathi, Tamil, Telugu, Gujarati, "
-        "Kannada, Malayalam) in 28–66 ms per sentence on CPU.",
-        bold_prefix="3. On-Device Indic Neural Machine Translation: "
+        "A multilingual translation engine supporting 10 regional Indian languages with offline dictionary mapping and fallback, "
+        "alongside an int8-quantized IndicTrans2 neural translation module implemented for offline research evaluation.",
+        bold_prefix="3. Multilingual Translation Subsystem: "
     )
 
     add_bullet_p(
         doc,
-        "A local neural speech engine powered by Meta MMS-TTS (VITS architecture), generating 16 kHz broadcast-quality WAV audio "
-        "with a Real-Time Factor (RTF) of 0.148 (6.7x faster than real-time) within a memory footprint under 450 MB.",
-        bold_prefix="4. Multilingual Neural Speech Synthesis: "
+        "A multi-tier speech fallback engine (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API) ensuring reliable vocalization across platforms, "
+        "with Meta MMS-TTS implemented in src/language_services as an optional neural speech synthesis module.",
+        bold_prefix="4. Multilingual Speech Synthesis: "
     )
 
     add_bullet_p(
         doc,
-        "A decoupled web architecture streaming video via MJPEG and inference states via Server-Sent Events (SSE) with sub-50 ms "
-        "latency, wrapped in a self-contained macOS desktop application package (.app) that launches without developer tools.",
+        "A decoupled web architecture streaming video via MJPEG and inference states via Server-Sent Events (SSE) with low latency, "
+        "wrapped in a self-contained macOS desktop application package (.app) that launches without developer tools.",
         bold_prefix="5. Asynchronous Web UI & Standalone Packaging: "
     )
 
@@ -102,10 +101,10 @@ def build_chapter4(doc: Document):
 
     add_bullet_p(
         doc,
-        "As established in our root-cause forensics (Prompt 25), simple sample duplication fails to expand the geometric manifold. "
+        "As established in our experimental root-cause investigations, simple sample duplication fails to expand the geometric manifold. "
         "Future work must implement 3D skeletal synthetic augmentation that perturbs finger extension profiles (mimicking foreshortening "
         "and curling) and translates wrist anchors level to the camera plane, preventing the Class K -> Class T collapse.",
-        bold_prefix="1. Biomechanical Multi-Signer Data Augmentation: "
+        bold_prefix="1. Biomechanical Data Augmentation: "
     )
 
     add_bullet_p(
@@ -145,6 +144,13 @@ def build_chapter4(doc: Document):
         "when branches diverge could suppress spurious letter insertions. This represents a research hypothesis to be tested on live "
         "multi-signer recordings, not an established result.",
         bold_prefix="6. Disagreement-Gated Uncertainty Output (Hypothesis): "
+    )
+
+    add_bullet_p(
+        doc,
+        "Formal live recognition accuracy across novel signers has not been measured yet. We will record multi-signer live "
+        "benchmark data using tools/collection/record_live_benchmark_samples.py and report empirical live accuracy once multi-signer collection is complete.",
+        bold_prefix="7. Live Multi-Signer Benchmark Validation (Pending): "
     )
 
     print("Chapter 4 generated successfully.")
