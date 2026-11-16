@@ -1,168 +1,187 @@
-# Installation and Setup Guide
+# Cross-Platform Installation and Setup Guide
 
-This guide details the verified steps to set up, configure, and run the **Indian Sign Language (ISL) Recognition & Translation System** on macOS and Linux.
+This guide details verified steps to install, configure, and run the **Indian Sign Language (ISL) Recognition & Translation Desktop System** across macOS, Linux, and Windows.
+
+**Project Contributors & Roles:**
+- **Arpit:** Recognition Model Development
+- **Sachin:** Data Collection, Preprocessing & Backend Support
+- **Abhu:** Multilingual Support & TTS
+- **Yash:** Frontend & Deployment
 
 ---
 
 ## 1. System Requirements
 
-| Component | Minimum Specification | Recommended Specification |
-| :--- | :--- | :--- |
-| **Operating System** | macOS 12+ (Monterey, Ventura, Sonoma, Sequoia) or Ubuntu 20.04+ | macOS 14+ (Apple Silicon M1/M2/M3/M4) |
-| **Python** | Python 3.9 – 3.11 | Python 3.10 |
-| **Memory (RAM)** | 4 GB | 8 GB or higher |
-| **Camera** | Built-in webcam or external USB camera (720p 30fps) | 1080p 30fps webcam with good lighting |
-| **Audio** | Speaker / audio output (for Text-to-Speech) | Native system audio |
-| **Disk Space** | ~2 GB (including dependencies and virtual environment) | ~5 GB (if building standalone `.app` bundle) |
+| Component | macOS | Linux (Ubuntu / Debian) | Windows 10 / 11 |
+| :--- | :--- | :--- | :--- |
+| **Operating System** | macOS 12+ (Monterey through Sequoia) | Ubuntu 20.04+ / Debian 11+ | Windows 10 / 11 (64-bit) |
+| **Python Version** | Python 3.10 (3.9–3.11 supported) | Python 3.10 (3.9–3.11 supported) | Python 3.10 (3.9–3.11 supported) |
+| **Architecture** | Apple Silicon (M1–M4) / Intel x86_64 | x86_64 / ARM64 | x86_64 |
+| **Memory (RAM)** | 4 GB min (8 GB recommended) | 4 GB min (8 GB recommended) | 4 GB min (8 GB recommended) |
+| **Webcam** | Built-in or USB (720p 30fps) | UVC-compatible USB camera | DirectShow / Media Foundation camera |
+| **Audio Output** | Native `say` / `pyttsx3` / `afplay` | `espeak` / `aplay` / `paplay` | SAPI5 via `pyttsx3` / Browser speech |
+| **Disk Space** | ~2 GB free disk space | ~2 GB free disk space | ~2 GB free disk space |
+
+> [!IMPORTANT]
+> **Why Python 3.10 is Recommended:**  
+> The computer vision and neural perception pipeline requires **MediaPipe (`0.10.21`)** and **TensorFlow (`2.16.2`)**. Pre-compiled binary wheels are officially distributed and verified for Python 3.9–3.11. Modern operating systems defaulting to Python 3.12+ lack pre-compiled binary wheels for these packages and will fail during dependency installation.
 
 ---
 
-## 2. Step-by-Step Installation
+## 2. Platform-Specific Setup
 
-### Step 1: Clone the Repository
+### A. macOS (Apple Silicon & Intel)
 
+#### 1. Install Python 3.10 via Homebrew
 ```bash
-git clone https://github.com/<your-username>/indian-sign-language-recognition.git
-cd indian-sign-language-recognition
-```
-
-### Step 2: Set Up Python 3.10 Virtual Environment
-
-> [!IMPORTANT]
-> **Why Python 3.10 is Recommended:**
-> The computer vision and neural perception pipeline requires **MediaPipe (`0.10.21`)** and **TensorFlow (`2.16.2`)**. On macOS Apple Silicon (M1/M2/M3/M4) and Linux, pre-compiled ARM64 wheels are officially verified and distributed for Python 3.9–3.11. Modern macOS installations frequently default to newer Python versions (such as Python 3.12, 3.13, or 3.14), which lack pre-compiled binary wheels for TensorFlow/MediaPipe and will fail during dependency installation.
-
-#### macOS (Apple Silicon & Intel via Homebrew):
-
-```bash
-# 1. Install Python 3.10 if not already installed
 brew install python@3.10
-
-# 2. Verify Python 3.10 is available
 python3.10 --version
-
-# 3. Create virtual environment named 'venv'
-python3.10 -m venv venv
-
-# 4. Activate the virtual environment
-source venv/bin/activate
 ```
 
-#### Linux / General Setup (where `python3` is Python 3.10):
-
+#### 2. Create and Activate Virtual Environment
 ```bash
-# Verify Python version (must be 3.9 - 3.11)
-python3 --version
-
-# Create virtual environment named 'venv'
-python3 -m venv venv
-
-# Activate virtual environment
+python3.10 -m venv venv
 source venv/bin/activate
 ```
 
-*(To deactivate when finished later, run `deactivate`)*
-
-### Step 3: Upgrade Pip & Install Dependencies
-
+#### 3. Install Dependencies
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install pyttsx3 gTTS deep-translator
 ```
 
-#### Core Dependencies Overview:
-- **`mediapipe==0.10.21`**: Cross-platform ML solutions for hand landmark tracking (21 3D normalized keypoints).
-- **`tensorflow==2.16.2` / `tf-keras==2.16.0`**: Neural network execution engine for Landmark MLP and visual CNN.
-- **`opencv-python==4.11.0.86`**: Video capture, frame preprocessing, and HUD overlay generation.
-- **`flask==3.1.3`**: High-performance local web server hosting the interactive UI, MJPEG video feed, and SSE stream.
-- **`scikit-learn==1.7.2`**: Continuous learning, personal adapters, and feature evaluation.
-- **`pillow==12.3.0`**: Image cropping and bounding box extraction for visual CNN.
+#### 4. Camera Permissions on macOS
+1. Open **System Settings** > **Privacy & Security** > **Camera**.
+2. Verify your terminal emulator (Terminal, iTerm2, or VS Code) is toggled **ON**.
+3. Camera capture automatically selects Apple Silicon native `cv2.CAP_AVFOUNDATION`.
 
-### Step 4: Verify Model Artifacts
+---
 
-All necessary pre-trained model weights and label encoders are included directly within the `models/` directory (~7.1 MB total). Ensure all required files are present:
+### B. Linux (Ubuntu / Debian / Raspberry Pi OS 64-bit)
+
+#### 1. Install System Prerequisites & Audio Drivers
+```bash
+sudo apt update
+sudo apt install -y python3.10 python3.10-venv python3-pip \
+    libgl1-mesa-glx libglib2.0-0 espeak libasound2-dev \
+    pulseaudio-utils v4l-utils
+```
+
+#### 2. User Camera Permissions
+Ensure your user account is in the `video` group:
+```bash
+sudo usermod -a -G video $USER
+```
+*(Log out and log back in for group membership to take effect)*
+
+#### 3. Create and Activate Virtual Environment
+```bash
+python3.10 -m venv venv
+source venv/bin/activate
+```
+
+#### 4. Install Dependencies
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install pyttsx3 gTTS deep-translator
+```
+
+Camera capture automatically utilizes Linux Video4Linux2 (`cv2.CAP_V4L2`), and TTS leverages `pyttsx3` (via eSpeak/speech-dispatcher) and `gTTS` with PulseAudio (`paplay`) / ALSA (`aplay`).
+
+---
+
+### C. Windows (Windows 10 / 11 64-bit)
+
+#### 1. Install Python 3.10
+Download Python 3.10 from [python.org](https://www.python.org/downloads/release/python-31011/) or run via Windows Package Manager:
+```powershell
+winget install Python.Python.3.10
+```
+> [!NOTE]
+> During installation, ensure the checkbox **"Add Python 3.10 to PATH"** is checked.
+
+#### 2. Create and Activate Virtual Environment
+In PowerShell or Command Prompt:
+```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
+*(If PowerShell blocks script execution, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`)*
+
+#### 3. Install Dependencies
+```powershell
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+pip install pyttsx3 gTTS deep-translator
+```
+
+Camera capture utilizes Windows DirectShow (`cv2.CAP_DSHOW`) and Media Foundation (`cv2.CAP_MSMF`). Offline speech synthesis uses Microsoft SAPI5 voices via `pyttsx3` with automatic browser Web Speech API fallback.
+
+---
+
+## 3. Verifying Model Checkpoints
+
+Verify that all required pre-trained weights and label maps are present in the `models/` folder:
 
 ```bash
 ls -lh models/
 ```
 
 Expected files:
-- `alphabet_model_26class.h5` (~295 KB) — Production 26-class Dense Landmark fingerspelling model
+- `alphabet_model_26class.h5` (~295 KB) — 26-class Dense Landmark fingerspelling model
 - `alphabet_label_map.json` — Mapping for characters A–Z
-- `alphabet_model_26class_summary.txt` — Architecture specification
-- `cnn_sign_model.h5` (~3.2 MB) — Production 128x128 RGB visual CNN model
+- `cnn_sign_model.h5` (~3.2 MB) — 128x128 RGB visual CNN model
 - `cnn_label_map.json` — 26-class character mapping for CNN
-- `experimental/` — Dual-hand 144D feature models and ablation checkpoints
+- `experimental/phase5b2_prompt23_class_k/config_d_ablation_144d/best_val_model.h5` (~420 KB) — 20-class dual-hand landmark model
 
-### Step 5: Run Automated Tests
+---
 
-Verify that your local environment satisfies all model, inference, debounce, and translation contracts:
+## 4. Running the Automated Test Suite
+
+Run the full cross-platform test suite:
 
 ```bash
 python -m unittest discover -s tests
 ```
 
-**Expected output:**
+**Expected Result:**
 ```text
-Ran 235 tests in ~12.5s
+Ran 238 tests in ~30s
 OK
 ```
 
 ---
 
-## 3. Launching the Application
+## 5. Launching the Application
 
-### Option A: Double-Click Desktop Launch (Recommended for macOS)
+### Option A: Double-Click Desktop Launch (macOS)
+1. Double-click **`ISL Translator.app`** (or **`Launch ISL Translator.command`**).
+2. The launcher performs environment validation, model verification, binds port 5001, and opens your browser.
 
-1. Open Finder to the repository directory.
-2. Double-click **`ISL Translator.app`** (or **`Launch ISL Translator.command`**).
-3. The launcher automatically:
-   - Verifies models, templates, and static assets.
-   - Binds port 5001 with single-instance safety.
-   - Polls health and launches your default browser at **`http://127.0.0.1:5001`**.
-
-### Option B: Terminal Command Launch
-
-Run the Python launcher directly:
+### Option B: Terminal Command Launch (Cross-Platform)
+From the project root:
 
 ```bash
-python packaging/launcher.py
-```
-
-Or start Flask directly:
-```bash
+# macOS / Linux
 PORT=5001 python src/app.py
+
+# Windows PowerShell
+$env:PORT=5001; python src/app.py
 ```
 
-Open your browser to: **`http://127.0.0.1:5001`**
+Open your web browser to:
+**`http://127.0.0.1:5001`**
 
 ---
 
-## 4. macOS Specific Notes & Troubleshooting
+## 6. TTS & Translation Fallback Architecture
 
-### Camera Permissions
-On macOS, your terminal emulator (Terminal, iTerm2, or VS Code / IDE) requires explicit permission to access the webcam:
-1. Open **System Settings** > **Privacy & Security** > **Camera**.
-2. Ensure your terminal application (e.g., Terminal, VS Code) is toggled **ON**.
-3. If the camera feed is blank or shows error `Cannot open camera index 0`, verify that no other application (Zoom, FaceTime, Photo Booth) is using the camera.
-4. If you have multiple webcams connected, you can specify camera index in `src/inference_engine.py` or `src/mediapipe_utils.py` by changing `cv2.VideoCapture(0)` to index `1`.
+The system features an automatic 4-tier speech synthesis fallback chain:
+1. **Tier 1:** Native macOS `say` (macOS native voices: Rishi, Lekha, Piya, Vani, Geeta, Soumya)
+2. **Tier 2:** Offline cross-platform `pyttsx3` (Windows SAPI5, Linux eSpeak, macOS NSSpeechSynthesizer)
+3. **Tier 3:** High-fidelity `gTTS` + local audio player (`afplay` / `paplay` / `aplay` / `powershell`)
+4. **Tier 4:** Browser Web Speech API fallback (zero-configuration fallback for headless environments, Docker, and systems without local audio drivers)
 
-### Port Conflicts
-If port 5000 is occupied (e.g., by macOS AirPlay Receiver on macOS Monterey or newer):
-```bash
-# Check what is listening on port 5000
-lsof -i :5000
-
-# Disable AirPlay Receiver: System Settings > General > AirDrop & AirPlay > AirPlay Receiver -> OFF
-# Or launch on a different port:
-FLASK_RUN_PORT=5001 python src/app.py
-```
-
-### Standalone macOS Application Packaging
-If you wish to build a native standalone `.app` bundle for macOS:
-```bash
-cd packaging
-chmod +x build_app.sh
-./build_app.sh
-```
-The compiled bundle will be generated in `dist/ISL Translator.app`.
+Translation features online neural translation via MyMemory API with automatic exponential backoff retries and offline dictionary / transliteration fallback.

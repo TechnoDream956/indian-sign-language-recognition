@@ -1339,10 +1339,11 @@ def transliterate_fallback(text: str, language: str) -> str:
 # ==============================================================================
 # 4. ONLINE TRANSLATION ENGINE (MyMemoryTranslator with Safe Fallbacks)
 # ==============================================================================
-def _translate_online_safe(text: str, language: str) -> Optional[str]:
+def _translate_online_safe(text: str, language: str, max_retries: int = 2) -> Optional[str]:
     """
-    Query MyMemory translation service with a strict timeout.
-    Returns cleaned translation string, or None if error/timeout.
+    Query MyMemory translation service with a strict timeout, exponential backoff retries,
+    and automatic failure isolation.
+    Returns cleaned translation string, or None if error/timeout/exhausted.
     """
     if language == "English" or not text.strip():
         return text
@@ -1351,24 +1352,29 @@ def _translate_online_safe(text: str, language: str) -> Optional[str]:
     if not target_code:
         return None
 
-    try:
-        from deep_translator import MyMemoryTranslator
-        # Use dedicated academic project identifier for clean quota
-        translator = MyMemoryTranslator(
-            source="en-US",
-            target=target_code,
-            email="isl.academic.translator@gmail.com"
-        )
-        translated = translator.translate(text)
-        if translated and isinstance(translated, str) and translated.strip():
-            # Clean up extraneous service artifacts if any
-            clean = re.sub(r"\s*Name\b", "", translated).strip()
-            # If the service returned the identical raw English text, reject it as unsupported
-            if clean.lower() == text.strip().lower() and language != "English":
-                return None
-            return clean
-    except Exception:
-        pass
+    # Check in-memory cache first to avoid redundant API queries
+    cache_key = (text.strip().lower(), language)
+    if cache_key in _TRANSLATION_CACHE:
+        return _TRANSLATION_CACHE[cache_key]
+
+    for attempt in range(max_retries + 1):
+        try:
+            from deep_translator import MyMemoryTranslator
+            translator = MyMemoryTranslator(
+                source="en-US",
+                target=target_code,
+                email="isl.academic.translator@gmail.com"
+            )
+            translated = translator.translate(text)
+            if translated and isinstance(translated, str) and translated.strip():
+                clean = re.sub(r"\s*Name\b", "", translated).strip()
+                if clean.lower() == text.strip().lower() and language != "English":
+                    return None
+                return clean
+        except Exception:
+            if attempt < max_retries:
+                backoff_delay = 0.25 * (2 ** attempt)
+                time.sleep(backoff_delay)
     return None
 
 

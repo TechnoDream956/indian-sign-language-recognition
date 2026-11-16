@@ -145,36 +145,48 @@ class TranslationAdapter:
             "source_lang": "en",
         }).encode("utf-8")
 
-        req = urllib.request.Request(
-            endpoint,
-            data=payload,
-            headers={"Content-Type": "application/json", "Accept": "application/json"},
-            method="POST",
-        )
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            req = urllib.request.Request(
+                endpoint,
+                data=payload,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    status = resp.getcode()
+                    body = resp.read().decode("utf-8")
 
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                status = resp.getcode()
-                body = resp.read().decode("utf-8")
+                    if status != 200:
+                        if status in (429, 502, 503, 504) and attempt < max_retries:
+                            time.sleep(0.25 * (2 ** attempt))
+                            continue
+                        return False, None, f"HTTP {status}"
 
-                if status != 200:
-                    return False, None, f"HTTP {status}"
+                    data = json.loads(body)
+                    raw_translation = data.get("translated_text", "")
+                    if self._validate_translated_text(text, raw_translation, lang_code):
+                        return True, raw_translation.strip(), None
+                    else:
+                        return False, None, "Invalid or untranslated output from neural model"
 
-                data = json.loads(body)
-                raw_translation = data.get("translated_text", "")
-                if self._validate_translated_text(text, raw_translation, lang_code):
-                    return True, raw_translation.strip(), None
-                else:
-                    return False, None, "Invalid or untranslated output from neural model"
+            except urllib.error.HTTPError as e:
+                if e.code in (429, 502, 503, 504) and attempt < max_retries:
+                    time.sleep(0.25 * (2 ** attempt))
+                    continue
+                return False, None, f"HTTPError {e.code}"
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                if attempt < max_retries:
+                    time.sleep(0.25 * (2 ** attempt))
+                    continue
+                return False, None, f"NetworkError: {type(e).__name__}"
+            except json.JSONDecodeError as e:
+                return False, None, f"MalformedJSON: {e}"
+            except Exception as e:
+                return False, None, f"UnexpectedError: {type(e).__name__}"
 
-        except urllib.error.HTTPError as e:
-            return False, None, f"HTTPError {e.code}"
-        except (urllib.error.URLError, TimeoutError, OSError) as e:
-            return False, None, f"NetworkError: {type(e).__name__}"
-        except json.JSONDecodeError as e:
-            return False, None, f"MalformedJSON: {e}"
-        except Exception as e:
-            return False, None, f"UnexpectedError: {type(e).__name__}"
+        return False, None, "RetriesExhausted"
 
     def translate(self, text: Optional[str], target_lang: Optional[str]) -> Dict[str, Any]:
         """

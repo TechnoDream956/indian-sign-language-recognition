@@ -968,6 +968,52 @@ class InferenceEngine:
                 pass
             self._hands_detector = None
 
+    def _open_camera_capture(self) -> Optional[cv2.VideoCapture]:
+        """
+        Open camera with platform-prioritized backends:
+        - macOS: cv2.CAP_AVFOUNDATION -> cv2.CAP_ANY
+        - Windows: cv2.CAP_DSHOW -> cv2.CAP_MSMF -> cv2.CAP_ANY
+        - Linux: cv2.CAP_V4L2 -> cv2.CAP_ANY
+        """
+        backends = []
+        if sys.platform.startswith("darwin"):
+            backends = [getattr(cv2, "CAP_AVFOUNDATION", cv2.CAP_ANY), cv2.CAP_ANY]
+        elif sys.platform.startswith("win"):
+            backends = [
+                getattr(cv2, "CAP_DSHOW", cv2.CAP_ANY),
+                getattr(cv2, "CAP_MSMF", cv2.CAP_ANY),
+                cv2.CAP_ANY,
+            ]
+        elif sys.platform.startswith("linux"):
+            backends = [getattr(cv2, "CAP_V4L2", cv2.CAP_ANY), cv2.CAP_ANY]
+        else:
+            backends = [cv2.CAP_ANY]
+
+        seen = set()
+        deduped = []
+        for b in backends:
+            if b not in seen:
+                seen.add(b)
+                deduped.append(b)
+
+        for backend in deduped:
+            try:
+                cap = cv2.VideoCapture(self._camera_index, backend)
+                if cap is not None and cap.isOpened():
+                    return cap
+                if cap is not None:
+                    cap.release()
+            except Exception:
+                pass
+
+        try:
+            cap = cv2.VideoCapture(self._camera_index)
+            if cap is not None and cap.isOpened():
+                return cap
+        except Exception:
+            pass
+        return None
+
     def _run_camera_capture(self) -> None:
         """Dedicated thread for low-latency hardware camera capture, dropping stale frames."""
         fps_buffer = deque(maxlen=30)
@@ -997,9 +1043,9 @@ class InferenceEngine:
                 continue
 
             if cap is None or not cap.isOpened():
-                cap = cv2.VideoCapture(self._camera_index)
+                cap = self._open_camera_capture()
                 self._cap = cap
-                if not cap.isOpened():
+                if cap is None or not cap.isOpened():
                     consecutive_cam_failures += 1
                     with self._lock:
                         self._state["camera_ok"] = False
