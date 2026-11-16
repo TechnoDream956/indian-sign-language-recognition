@@ -76,7 +76,7 @@ python -m unittest tests/test_dual_hand_collection.py
 
 ---
 
-## 3. Continuous Integration & Pre-Commit Validation
+## 3. Automated Test Validation & Pre-Commit Checks
 
 Before submitting any pull request or pushing updates to GitHub, verify that:
 1. All 87 unit tests pass without errors (`python -m unittest discover -s tests`).

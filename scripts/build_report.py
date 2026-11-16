@@ -107,6 +107,13 @@ def main():
     print("\n[Step 6/6] Finalizing Document Settings & Saving Output...")
     enable_update_fields_on_open(doc)
     
+    # Set document core properties (removing template author/email placeholders)
+    cp = doc.core_properties
+    cp.author = "Arpit Sehrawat, Sachin Sharma, Abhu Sharma, Yash Aggarwal"
+    cp.title = "Real-Time Indian Sign Language Alphabet Recognition with Multilingual Translation and Speech Output"
+    cp.last_modified_by = "Arpit Sehrawat, Sachin Sharma, Abhu Sharma, Yash Aggarwal"
+    cp.comments = "B.Tech Computer Science Capstone Project Report, Bennett University"
+    
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     doc.save(OUTPUT_PATH)
     print(f"\nSaved final project report to: {OUTPUT_PATH}")

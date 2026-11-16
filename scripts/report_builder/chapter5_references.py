@@ -9,7 +9,7 @@ from .xml_helpers import add_heading_1, add_styled_paragraph
 def build_chapter5(doc: Document):
     """Generate Chapter 5: References."""
     
-    add_heading_1(doc, "5. REFERENCES")
+    add_heading_1(doc, "REFERENCES")
 
     references = [
         "1. B. Subramanian, B. Olimov, S. M. Naik, S. Kim, K.-H. Park, and J. Kim, “An integrated mediapipe-optimized GRU model for Indian sign language recognition,” Scientific Reports, vol. 12, no. 1, p. 11964, Jul. 2022. DOI: 10.1038/s41598-022-15998-7.",

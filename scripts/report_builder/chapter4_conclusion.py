@@ -2,46 +2,76 @@
 """
 
 from docx import Document
-from .xml_helpers import add_heading_1, add_heading_2, add_body_p, add_bullet_p
+from .xml_helpers import (
+    add_heading_1, add_heading_2, add_body_p, add_bullet_p,
+    add_table_caption, format_academic_table
+)
 
 
 def build_chapter4(doc: Document):
     """Generate Chapter 4: Conclusion."""
     
-    # 4. CONCLUSION
-    add_heading_1(doc, "4. CONCLUSION")
+    # 4. CONCLUSION (Style GS1 provides automatic chapter numbering)
+    add_heading_1(doc, "CONCLUSION")
 
-    # 4.1 Goals/ Vision
-    add_heading_2(doc, "4.1. Goals/ Vision")
+    # 4.1 Goals/ Vision (Style GS2 provides automatic section numbering)
+    add_heading_2(doc, "Goals/ Vision")
 
     add_body_p(
         doc,
         "The overarching vision of this project was to formulate an accessible, low-cost, non-invasive assistive technology "
-        "capable of breaking down the significant communication barrier separating India's 18 million deaf citizens from the hearing "
-        "majority. By recognizing that certified human interpreters are scarce for daily interactions, "
-        "our goal was to eliminate reliance on expensive, cumbersome wearable sensors (data gloves) and latency-prone, "
-        "privacy-compromising cloud APIs. We envisioned a fully local, edge-deployable pipeline running on commodity consumer "
-        "hardware that translates real-time Indian Sign Language gestures into stabilized text, converts phrases into regional "
-        "Indian languages, and speaks aloud through multi-tier speech synthesis."
+        "capable of breaking down communication barriers for deaf individuals. By recognizing that certified human "
+        "interpreters are scarce for daily interactions, our goal was to eliminate reliance on expensive, cumbersome "
+        "wearable sensors (data gloves) and latency-prone, privacy-compromising cloud APIs. We envisioned a fully local, "
+        "edge-deployable pipeline running on commodity consumer hardware that translates real-time Indian Sign Language "
+        "gestures into stabilized text, converts phrases into regional Indian languages, and vocalizes through multi-tier speech synthesis."
     )
 
     add_body_p(
         doc,
-        "Throughout this research, our technical focus underwent critical maturation. While initial milestones explored "
-        "whole-sign dynamic sequence classification (Word Mode using MoP-GRU), extensive user feedback and data audits demonstrated "
-        "that vocabulary-limited word models cannot support open-ended communication. Consequently, the project pivoted toward "
-        "mastering the 26-letter ISL fingerspelling alphabet—a combinatorial medium enabling signers to spell any word, proper noun, "
-        "or technical term. Reaching this vision demanded resolving complex bimanual occlusions, enforcing bilateral spatial invariance, "
-        "and coupling machine learning predictions with an intelligent temporal state machine."
+        "Throughout this research, our technical focus underwent necessary maturation. While initial milestones explored "
+        "whole-sign dynamic sequence classification (Word Mode using MoP-GRU), data audits demonstrated that vocabulary-limited "
+        "word models cannot support open-ended communication. Consequently, the project pivoted toward mastering the 26-letter "
+        "ISL fingerspelling alphabet—a combinatorial medium enabling signers to spell any word, proper noun, or technical term. "
+        "Reaching this vision demanded addressing bimanual occlusions, enforcing bilateral spatial invariance, and coupling "
+        "machine learning predictions with an intelligent temporal state machine."
     )
-
-    # 4.2 Delivered Solution
-    add_heading_2(doc, "4.2. Delivered Solution")
 
     add_body_p(
         doc,
-        "The completed engineering effort delivers an end-to-end, fully functional, and independently tested software platform "
-        "for real-time Indian Sign Language recognition, multilingual translation, and neural speech synthesis. The delivered "
+        "Table 6 summarizes the engineering status of each initial project goal (G-01 through G-06), documenting whether each "
+        "objective was fully met or partly met based on empirical measurements from the codebase."
+    )
+
+    # Goal Fulfillment Table
+    add_table_caption(doc, 6, "System Goal Fulfillment and Quantitative Evidence Summary")
+    table6 = doc.add_table(rows=7, cols=4)
+    headers6 = ["Goal ID", "Functional Domain", "Fulfillment Status", "Empirical Evidence & Quantitative Measurement"]
+    for idx, h in enumerate(headers6):
+        table6.rows[0].cells[idx].text = h
+
+    goals_eval_data = [
+        ("G-01", "Kinematic Perception", "Partly Met", "MediaPipe Hands extracts 21 3D landmarks per hand at 22.6 FPS sustained full pipeline throughput. Active dual-hand frame latency is 39.99 ms median / 44.16 ms mean on CPU, exceeding the 20 ms inference-only target due to rendering and pipeline overhead."),
+        ("G-02", "Alphabet Recognition", "Met", "Dual-hand 144D baseline achieves 78.19% Top-1 accuracy [72.43%, 83.13%] on held-out same-signer test partition (N=243); single-hand model achieves 75.93% on N=536 held-out test partition. Both exceed the 75% target."),
+        ("G-03", "Decision Fusion & Gating", "Met", "Multi-modal fusion implemented in src/fusion_engine.py with calibrated weights (0.65 landmark, 0.35 CNN), +0.10 agreement bonus, and 0.50 threshold. Disagreement arbitration preserves landmark authority."),
+        ("G-04", "Temporal Smoothing", "Met", "WordBuffer state machine in src/sentence_decoder.py implements 1.2 s debouncing and 5-frame stability confirmation. Reduced flapping by 85.7% (7 flaps to 1) on a synthetic 50-frame dropout sequence."),
+        ("G-05", "Multilingual Translation", "Met", "Curated local dictionary in src/translator.py translates text into 10 regional Indian languages in 0.001 ms (< 5 ms target) with zero cloud dependency for listed vocabulary; online MyMemory fallback cached to disk."),
+        ("G-06", "Speech Output", "Met", "Multi-tier speech engine in src/tts_engine.py provides functional vocalization across all 10 languages (macOS say, pyttsx3, gTTS, Web Speech API). Local synthesis launch is responsive (< 100 ms).")
+    ]
+
+    for r_idx, row in enumerate(goals_eval_data, start=1):
+        for c_idx, val in enumerate(row):
+            table6.rows[r_idx].cells[c_idx].text = val
+
+    format_academic_table(table6, col_widths=[0.8, 1.4, 1.2, 3.6])
+
+    # 4.2 Delivered Solution (Style GS2 provides automatic section numbering)
+    add_heading_2(doc, "Delivered Solution")
+
+    add_body_p(
+        doc,
+        "The completed engineering effort delivers an end-to-end, functional, and locally tested software platform "
+        "for real-time Indian Sign Language recognition, multilingual translation, and speech synthesis. The delivered "
         "system incorporates the following verified components:"
     )
 
@@ -50,7 +80,7 @@ def build_chapter4(doc: Document):
         "A multi-modal perception architecture that extracts 3D skeletal landmarks via MediaPipe Hands (21 per hand) and cropped 128x128x3 "
         "RGB appearance regions at approximately 22.6 FPS on active dual-hand frames. Includes a dynamic hand-presence router dispatching to single-hand 63D MLPs or "
         "dual-hand 144D bilateral invariant MLPs.",
-        bold_prefix="1. Multi-Modal Dual-Branch Vision Pipeline: "
+        bold_prefix="Multi-Modal Dual-Branch Vision Pipeline: "
     )
 
     add_bullet_p(
@@ -58,43 +88,43 @@ def build_chapter4(doc: Document):
         "A confidence-aware fusion engine that synthesizes geometric and appearance probability vectors (W_geom=0.65, W_cnn=0.35) "
         "with a +0.10 agreement bonus, coupled with a WordBuffer state machine featuring 1.2 s debouncing, 5-frame stability confirmation, "
         "and hands-free space, backspace, and clear controls.",
-        bold_prefix="2. Confidence Fusion & WordBuffer Debouncing: "
+        bold_prefix="Confidence Fusion & WordBuffer Debouncing: "
     )
 
     add_bullet_p(
         doc,
         "A multilingual translation engine supporting 10 regional Indian languages with offline dictionary mapping and fallback, "
         "alongside an int8-quantized IndicTrans2 neural translation module implemented for offline research evaluation.",
-        bold_prefix="3. Multilingual Translation Subsystem: "
+        bold_prefix="Multilingual Translation Subsystem: "
     )
 
     add_bullet_p(
         doc,
         "A multi-tier speech fallback engine (macOS say -> pyttsx3 -> gTTS -> Web Speech API) ensuring reliable vocalization across platforms, "
         "with Meta MMS-TTS implemented in src/language_services as an optional neural speech synthesis module.",
-        bold_prefix="4. Multilingual Speech Synthesis: "
+        bold_prefix="Multilingual Speech Synthesis: "
     )
 
     add_bullet_p(
         doc,
         "A decoupled web architecture streaming video via MJPEG and inference states via Server-Sent Events (SSE) with low latency, "
-        "wrapped in a self-contained macOS desktop application package (.app) that launches without developer tools.",
-        bold_prefix="5. Asynchronous Web UI & Standalone Packaging: "
+        "wrapped in a self-contained desktop application package that executes locally without developer tools.",
+        bold_prefix="Asynchronous Web UI & Standalone Packaging: "
     )
 
     add_bullet_p(
         doc,
-        "An exhaustive suite of 245 automated unit, regression, and integration tests covering inference logic, debounce timing, "
-        "translation accuracy, and API endpoints, maintaining a 100% pass rate under continuous integration.",
-        bold_prefix="6. Automated Quality Assurance: "
+        "An automated test suite of 245 unit, regression, and integration tests covering inference logic, debounce timing, "
+        "translation accuracy, and API endpoints; all 245 tests pass locally.",
+        bold_prefix="Automated Quality Assurance: "
     )
 
-    # 4.3 Remaining Work
-    add_heading_2(doc, "4.3. Remaining Work")
+    # 4.3 Remaining Work (Style GS2 provides automatic section numbering)
+    add_heading_2(doc, "Remaining Work")
 
     add_body_p(
         doc,
-        "In strict adherence to academic rigor, our evaluation documented that live camera performance remains vulnerable "
+        "In adherence to academic integrity, our evaluation documented that live camera performance remains sensitive "
         "to inter-signer morphological variation and camera perspective shifts. To transition this prototype into a clinical "
         "or commercial product, the following concrete technical roadmap is established:"
     )
@@ -102,9 +132,9 @@ def build_chapter4(doc: Document):
     add_bullet_p(
         doc,
         "As established in our experimental root-cause investigations, simple sample duplication fails to expand the geometric manifold. "
-        "Future work must implement 3D skeletal synthetic augmentation that perturbs finger extension profiles (mimicking foreshortening "
+        "Future work should implement 3D skeletal synthetic augmentation that perturbs finger extension profiles (mimicking foreshortening "
         "and curling) and translates wrist anchors level to the camera plane, preventing the Class K -> Class T collapse.",
-        bold_prefix="1. Biomechanical Data Augmentation: "
+        bold_prefix="Skeletal Postural Augmentation: "
     )
 
     add_bullet_p(
@@ -112,14 +142,14 @@ def build_chapter4(doc: Document):
         "To resolve mutual confusions between M vs N, and R vs U vs V, future iterations will extract explicit Euclidean "
         "distances between adjacent fingertips and compute closed-loop polygon areas between the thumb and index finger "
         "(resolving D vs P vs Q).",
-        bold_prefix="2. Explicit 3D Inter-Finger Contact & Loop Metrics: "
+        bold_prefix="Explicit 3D Inter-Finger Contact & Loop Metrics: "
     )
 
     add_bullet_p(
         doc,
         "Implement dynamic entry suppression gates (threshold >= 0.75) specifically for open palm (B) and resting horizontal "
         "two-finger (H) postures, ensuring transitional movements do not trigger false positive insertions.",
-        bold_prefix="3. Transitional Anchor Suppression Gating: "
+        bold_prefix="Transitional Anchor Suppression Gating: "
     )
 
     add_bullet_p(
@@ -127,14 +157,14 @@ def build_chapter4(doc: Document):
         "Extend the architecture from isolated fingerspelling character recognition to continuous sentence-level sign language "
         "translation using Connectionist Temporal Classification (CTC) and lightweight Temporal Transformers, enabling signers "
         "to communicate using fluid grammatical sentences.",
-        bold_prefix="4. Continuous Sentence-Level Sign Translation: "
+        bold_prefix="Continuous Sentence-Level Sign Translation: "
     )
 
     add_bullet_p(
         doc,
         "Quantize the entire pipeline for mobile hardware by compiling the MediaPipe perception graph and neural models into "
         "Apple CoreML (iOS) and TensorFlow Lite (Android), enabling direct smartphones deployment for deaf individuals in the field.",
-        bold_prefix="5. Mobile Edge Deployment (iOS & Android): "
+        bold_prefix="Mobile Edge Deployment (iOS & Android): "
     )
 
     add_bullet_p(
@@ -143,14 +173,14 @@ def build_chapter4(doc: Document):
         "is correct 66.67% of the time (38/57; 84.4% or 38/45 under the K/T override). We formulate the hypothesis that gating or displaying an explicit 'Uncertain / Re-sign' status "
         "when branches diverge could suppress spurious letter insertions. This represents a research hypothesis to be tested on live "
         "multi-signer recordings, not an established result.",
-        bold_prefix="6. Disagreement-Gated Uncertainty Output (Hypothesis): "
+        bold_prefix="Disagreement-Gated Uncertainty Output (Hypothesis): "
     )
 
     add_bullet_p(
         doc,
         "Formal live recognition accuracy across novel signers has not been measured yet. We will record multi-signer live "
         "benchmark data using tools/collection/record_live_benchmark_samples.py and report empirical live accuracy once multi-signer collection is complete.",
-        bold_prefix="7. Live Multi-Signer Benchmark Validation (Pending): "
+        bold_prefix="Live Multi-Signer Benchmark Validation (Pending): "
     )
 
     print("Chapter 4 generated successfully.")

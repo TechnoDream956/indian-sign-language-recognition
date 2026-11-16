@@ -22,6 +22,41 @@ def enable_update_fields_on_open(doc: Document):
         update_fields.set(qn('w:val'), 'true')
 
 
+def add_dot_leader_tab(p, pos_dxa: int = 9350):
+    """Add an explicit right-aligned dot-leader tab stop to a paragraph's XML."""
+    pPr = p._p.get_or_add_pPr()
+    tabs = pPr.find(qn('w:tabs'))
+    if tabs is None:
+        tabs = OxmlElement('w:tabs')
+        pPr.append(tabs)
+    tab = OxmlElement('w:tab')
+    tab.set(qn('w:val'), 'right')
+    tab.set(qn('w:leader'), 'dot')
+    tab.set(qn('w:pos'), str(pos_dxa))
+    tabs.append(tab)
+
+
+def set_page_break_before(p):
+    """Ensure a paragraph starts on a fresh new page."""
+    pPr = p._p.get_or_add_pPr()
+    if pPr.find(qn('w:pageBreakBefore')) is None:
+        pPr.append(OxmlElement('w:pageBreakBefore'))
+
+
+def clear_caps_and_format_run(r, font_size: float = 10.5, bold: bool = False, italic: bool = False):
+    """Format run cleanly in Times New Roman, explicitly clearing all-caps and small-caps formatting."""
+    r.font.name = 'Times New Roman'
+    r.font.size = Pt(font_size)
+    r.bold = bold
+    r.italic = italic
+    r.font.all_caps = False
+    if r._r.rPr is not None:
+        for tag in [qn('w:caps'), qn('w:smallCaps')]:
+            elem = r._r.rPr.find(tag)
+            if elem is not None:
+                r._r.rPr.remove(elem)
+
+
 def add_styled_paragraph(doc: Document, text: str, style_name: str = 'Body Double Space 0.5 First Line', 
                          align=None, space_before=None, space_after=None, line_spacing=None):
     """Add a paragraph with explicit style and formatting."""

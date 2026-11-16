@@ -17,7 +17,7 @@ The application uses a **Multi-Modal Decision Fusion Pipeline** combining RGB co
                     ┌───────────────────┴───────────────────┐
                     ▼                                       ▼
        ┌─────────────────────────┐             ┌─────────────────────────┐
-       │   MediaPipe Holistic    │             │   RGB Hand Region Crop  │
+       │   MediaPipe Hands    │             │   RGB Hand Region Crop  │
        │   (21 Keypoints / Hand) │             │    (Bounding Box / ROI) │
        └────────────┬────────────┘             └────────────┬────────────┘
                     │                                       │
@@ -26,7 +26,7 @@ The application uses a **Multi-Modal Decision Fusion Pipeline** combining RGB co
 ┌──────────────┐            ┌──────────────┐         ┌──────────────┐
 │ Single-Hand  │            │  Dual-Hand   │         │   RGB CNN    │
 │ Landmark MLP │            │ Landmark MLP │         │ (ResNet/Conv)│
-│ (42D/63D)    │            │ (144D / 20C) │         │ (64x64x3/26C)│
+│ (42D/63D)    │            │ (144D / 20C) │         │ (128x128x3/26C)│
 └──────┬───────┘            └──────┬───────┘         └──────┬───────┘
        │                           │                        │
        └─────────────┬─────────────┘                        │
@@ -46,7 +46,7 @@ The application uses a **Multi-Modal Decision Fusion Pipeline** combining RGB co
 | :--- | :--- | :--- | :--- | :--- |
 | **Single-Hand Landmark MLP** | `models/alphabet_model_26class.h5` | 3-Layer Dense + BatchNorm + Dropout + Softmax | `(None, 63)` or `(None, 42)` | 26 (A–Z) |
 | **Dual-Hand Landmark MLP** | `models/experimental/phase5b2_prompt23_class_k/config_d_ablation_144d/best_val_model.h5` | Deep MLP (256-128-64) + Spatial Feature Extractor | `(None, 144)` | 20 bimanual classes |
-| **RGB Appearance CNN** | `models/cnn_sign_model.h5` | 4 Conv2D blocks + MaxPool + Dense + Softmax | `(None, 64, 64, 3)` | 26 (A–Z) |
+| **RGB Appearance CNN** | `models/cnn_sign_model.h5` | 4 Conv2D blocks + MaxPool + Dense + Softmax | `(None, 128, 128, 3)` | 26 (A–Z) |
 
 ---
 
@@ -70,7 +70,7 @@ The dispatch logic resides in `src/alphabet_engine.py` and `src/fusion_engine.py
 
 Real webcam evaluation revealed distinct failure modes across 13 letters:
 
-| Letter | Observed Misclassification | Biomechanical Root Cause |
+| Letter | Observed Misclassification | Morphological Root Cause |
 | :--- | :--- | :--- |
 | **B** | False positive anchor | Palm facing camera with 4 extended fingers. Often triggers spuriously when hands enter the frame. |
 | **H** | False positive anchor | Two horizontal fingers extended. Low-margin threshold causes default to H when confidence dips. |

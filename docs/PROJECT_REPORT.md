@@ -4,7 +4,7 @@
 
 Indian Sign Language (ISL) is the primary visual-gestural language utilized by millions of deaf and hard-of-hearing individuals across the Indian subcontinent. Unlike American Sign Language (ASL) or British Sign Language (BSL), ISL possesses distinct structural and grammatical nuances, notably a heavy reliance on **two-handed fingerspelling** and complex torso-hand coordinate interactions.
 
-This project delivers an end-to-end, edge-deployable **Indian Sign Language Recognition & Translation System**. The platform captures webcam video input, extracts 543 spatial anatomical landmarks via Google MediaPipe Holistic, performs real-time neural gesture classification across two complementary modes (Dynamic Sequence Word Mode and Static Fingerspelling Alphabet Mode), translates recognized text into 10 regional Indian languages, and synthesizes audio speech in real time.
+This project delivers an end-to-end, edge-deployable **Indian Sign Language Recognition & Translation System**. The platform captures webcam video input, extracts 21 landmarks per hand via Google MediaPipe Hands, performs real-time neural gesture classification across two complementary modes (Dynamic Sequence Word Mode and Static Fingerspelling Alphabet Mode), translates recognized text into 10 regional Indian languages, and synthesizes audio speech in real time.
 
 ---
 
@@ -33,7 +33,7 @@ This project delivers an end-to-end, edge-deployable **Indian Sign Language Reco
 ## 3. Architecture & Data Flow
 
 ```text
-[ Webcam Video ] ──> [ MediaPipe Holistic ] ──> [ 1,662 Landmark Vector ]
+[ Webcam Video ] ──> [ MediaPipe Hands ] ──> [ Hand Landmark Feature Vector ]
                             │
               ┌─────────────┴─────────────┐
               ▼                           ▼

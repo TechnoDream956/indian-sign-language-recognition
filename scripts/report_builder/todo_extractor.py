@@ -46,8 +46,8 @@ def extract_todos(doc: Document):
         if not todos:
             f.write("### Verification Verdict: ZERO UNRESOLVED PLACEHOLDERS\n\n")
             f.write("All required sections, team names, enrollment numbers, faculty mentor credentials, "
-                    "reconciled benchmark metrics, failure forensic findings, and verified IEEE citations "
-                    "have been populated with 100% verified repository data.\n\n")
+                    "reconciled benchmark metrics, failure diagnostic findings, and verified IEEE citations "
+                    "have been populated with verified repository data.\n\n")
             f.write("| Status | Category | Details |\n")
             f.write("| :---: | :--- | :--- |\n")
             f.write("| **PASS** | Title & Header | 'REAL-TIME INDIAN SIGN LANGUAGE ALPHABET RECOGNITION WITH MULTILINGUAL TRANSLATION AND SPEECH OUTPUT' |\n")
