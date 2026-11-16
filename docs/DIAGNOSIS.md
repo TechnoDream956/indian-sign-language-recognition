@@ -42,7 +42,7 @@ Every finding in this report is backed by **measured, reproducible empirical dat
   Training datasets (`RealSign`, `OpenHands`) consist of third-person frontal photos taken from the perspective of an external observer (unmirrored). When a live application applies `cv2.flip(frame, 1)` for a familiar "selfie mirror" UI without maintaining unmirrored coordinates for feature extraction, coordinate geometry is inverted. In two-handed ISL signs (where passive and active hands play distinct asymmetric spatial roles), this inversion destroys spatial feature representations.
 - **Remediation & Live Entry Points Audit:**  
   Examined every point in the pipeline where a frame or coordinate can be flipped:
-  1. `src/inference_engine.py` (lines 686–702): Fixed with backward-compatible `model_input_unmirrored=True`. MediaPipe Hands and the CNN receive the raw unmirrored frame (`rgb_model`), while OpenCV drawing creates a mirrored display image for intuitive user viewing.
+  1. `src/inference_engine.py` (lines 686–702): Fixed with backward-compatible `model_input_unmirrored=True`. MediaPipe Hands and the CNN receive the raw unmirrored frame (`rgb_model`), while OpenCV drawing creates a mirrored display image for intuitive user viewing (*validated on held-out landmark data only; live validation pending*).
   2. `src/app.py` (`/api/camera/frame` & `/api/process_frame`): Passes `is_mirrored=False` to `process_frame`.
   3. `src/static/app.js` (`streamLoop`): `ctx.drawImage(videoEl, 0, 0, 640, 480)` transmits unmirrored sensor bytes to `/api/process_frame`.
   4. Browser CSS (`transform: scaleX(-1)`): Applied purely to the client-side `<video>` element for the visual mirror effect without mutating pixel buffers.
@@ -158,11 +158,10 @@ Evaluated on the exact same 243 same-signer held-out samples where paired raw la
 
 ## 3. Summary of Verified Fixes Applied in Phase 2
 
-1. **Camera Mirror Parity:** Defaulted `model_input_unmirrored=True` so MediaPipe and CNN receive training-aligned coordinates while mirroring is preserved for user display.
+1. **Camera Mirror Parity:** Defaulted `model_input_unmirrored=True` so MediaPipe and CNN receive training-aligned coordinates while mirroring is preserved for user display (*validated on held-out landmark data only; live validation pending*).
 2. **Hand-Count Hysteresis:** Added 2-frame temporal grace period in `AlphabetEngine.process_dual_landmarks`, preventing pipeline flapping during hand occlusion (evaluated on a synthetic 50-frame dropout sequence, not real recordings).
 3. **Statistical Significance Validation:** Evaluated K/T disambiguation and documented that while nominally $\chi^2 = 6.7222$, the hypothesis test is invalid due to test-data tuning.
 4. **Reproducible Evaluation Suite:** Created `src/evaluate.py` with 95% bootstrap confidence intervals, paired fusion ablation, and mirror parity checks.
 5. **Latency Benchmarking Suite:** Created `src/benchmark_latency.py` distinguishing component inference vs full end-to-end `InferenceEngine.process_frame`.
 6. **Live Data Collection & Benchmark Tool:** Created `tools/collection/record_live_benchmark_samples.py`.
 7. **Full Test Suite Integrity:** All **245 tests** pass cleanly.
-7. **Full Test Suite Integrity:** All **237 tests** pass cleanly.

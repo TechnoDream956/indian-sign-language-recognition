@@ -70,7 +70,7 @@ def build_chapter4(doc: Document):
 
     add_bullet_p(
         doc,
-        "A multi-tier speech fallback engine (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API) ensuring reliable vocalization across platforms, "
+        "A multi-tier speech fallback engine (macOS say -> pyttsx3 -> gTTS -> Web Speech API) ensuring reliable vocalization across platforms, "
         "with Meta MMS-TTS implemented in src/language_services as an optional neural speech synthesis module.",
         bold_prefix="4. Multilingual Speech Synthesis: "
     )

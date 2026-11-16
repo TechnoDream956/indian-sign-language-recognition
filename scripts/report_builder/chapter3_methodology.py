@@ -157,22 +157,27 @@ def build_chapter3(doc: Document):
         doc,
         "The user interface is engineered as a responsive, modern web application styled in a clean Midnight Teal theme "
         "utilizing semantic HTML5, Vanilla CSS custom properties, and native ES6 JavaScript without heavyweight frontend framework overhead. "
-        "As depicted in Figure 9, the interface is organized into a cohesive dual-pane telemetry layout:\n\n"
+        "As depicted in Figure 7, the interface is organized into a cohesive dual-pane telemetry layout:\n\n"
         "1. Visual Perception Canvas (Left): Displays the 640x480 MJPEG video feed overlaid with real-time MediaPipe skeletal landmarks, "
         "color-coded bounding boxes, an active prediction badge ('W'), and a dynamic confidence progress bar indicating recognition stability.\n\n"
         "2. Linguistic & Acoustic Control Center (Right): Features an assembled WordBuffer text pane showing transcribed characters, "
         "hands-free action buttons (Space, Backspace, Clear), a target language selector (supporting 10 regional Indian languages), "
         "a translation panel displaying regional script, and an integrated audio player for synthesizing speech."
     )
-    p_mockup_note = add_body_p(
-        doc,
-        "Note on Interface Representation: The graphic below depicts the simulated UI layout mockup. "
-    )
-    add_todo_placeholder(p_mockup_note, "Capture and insert live webcam screenshot with novel signer on physical test machine")
-
-    insert_image_centered(doc, os.path.join(FIGURES_DIR, "fig_ui_screenshot.png"), width_inches=6.2)
-    p_caption9 = add_figure_caption(doc, 9, "User Interface Architecture Layout Mockup (Live Video Overlay and Multilingual Buffer)")
-    add_todo_placeholder(p_caption9, "Replace interface layout mockup with verified live hardware webcam screenshot")
+    ui_live_path = os.path.join(FIGURES_DIR, "ui_live_running_desktop.png")
+    ui_mockup_path = os.path.join(FIGURES_DIR, "fig_ui_screenshot.png")
+    if os.path.exists(ui_live_path):
+        insert_image_centered(doc, ui_live_path, width_inches=6.2)
+        add_figure_caption(doc, 7, "Real-Time User Interface with Live Video Overlay and Multilingual Buffer (Desktop Application)")
+    else:
+        p_mockup_note = add_body_p(
+            doc,
+            "Note on Interface Representation: The graphic below depicts the simulated UI layout mockup. "
+        )
+        add_todo_placeholder(p_mockup_note, "Capture and insert live webcam screenshot with novel signer on physical test machine")
+        insert_image_centered(doc, ui_mockup_path, width_inches=6.2)
+        p_caption7 = add_figure_caption(doc, 7, "User Interface Architecture Layout Mockup (Live Video Overlay and Multilingual Buffer)")
+        add_todo_placeholder(p_caption7, "Replace interface layout mockup with verified live hardware webcam screenshot")
 
     # 3.6 System Implementation
     add_heading_2(doc, "3.6. System Implementation")
@@ -439,14 +444,17 @@ def build_chapter3(doc: Document):
     # Forensic Analysis of K -> T
     add_body_p(
         doc,
-        "Figure 7 illustrates the definitive forensic breakdown of the Class K -> Class T collapse (Root Cause C: Combined Translation "
+        "Figure 9 illustrates the definitive forensic breakdown of the Class K -> Class T collapse (Root Cause C: Combined Translation "
         "and Hand-Shape Interaction). Counterfactual inference ablation proved that inter-wrist vertical translation (Delta_y) "
         "was not the primary driver: replacing Delta_y with the training mean still yielded 100% Class T predictions. Only when "
         "the 126D hand-shape stream was counterfactually replaced did the prediction immediately flip to Class K (99.45% confidence), "
         "demonstrating that multi-space postural drift across multiple joints collectively drove the classification failure."
     )
-    insert_image_centered(doc, os.path.join(FIGURES_DIR, "fig7_class_k_t_forensics.png"), width_inches=6.2)
-    add_figure_caption(doc, 7, "Forensic Root-Cause Analysis of Class K → Class T Classification Collapse")
+    forensic_img = os.path.join(FIGURES_DIR, "fig9_class_k_t_forensics.png")
+    if not os.path.exists(forensic_img):
+        forensic_img = os.path.join(FIGURES_DIR, "fig7_class_k_t_forensics.png")
+    insert_image_centered(doc, forensic_img, width_inches=6.2)
+    add_figure_caption(doc, 9, "Forensic Root-Cause Analysis of Class K → Class T Classification Collapse")
 
     # Figure 10: Normalization flaw
     add_body_p(
@@ -456,7 +464,7 @@ def build_chapter3(doc: Document):
         "signer moved their hands apart. The reconciled pipeline normalizes each hand by its own independent metacarpal bone scale, "
         "preserving intrinsic finger geometry regardless of bilateral wrist separation."
     )
-    insert_image_centered(doc, os.path.join(FIGURES_DIR, "fig_normalization_flaw.png"), width_inches=6.0)
+    insert_image_centered(doc, os.path.join(FIGURES_DIR, "fig_normalization_flaw.png"), width_inches=3.8)
     add_figure_caption(doc, 10, "Biomechanical Skeletal Normalization and Cross-Hand Distortion Comparison")
 
     # Runtime Benchmarks (Table 5)
@@ -495,7 +503,7 @@ def build_chapter3(doc: Document):
         doc,
         "*Note on Optional Neural Services: IndicTrans2 and Meta MMS-TTS are implemented in src/language_services/neural_translator.py "
         "and src/language_services/neural_tts.py as optional offline research modules. The default production pipeline uses local dictionary "
-        "translation and the multi-tier speech fallback engine (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API)."
+        "translation and the multi-tier speech fallback engine (macOS say -> pyttsx3 -> gTTS -> Web Speech API)."
     )
 
     print("Chapter 3 generated successfully.")

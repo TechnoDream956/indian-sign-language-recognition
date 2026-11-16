@@ -11,7 +11,7 @@
 
 ## 1. Project Team & Responsibilities (Strict Attribution)
 
-| Contributor | Mandatory Team Role | Key Subsystem Responsibilities |
+| Contributor | Project Team Role | Key Subsystem Responsibilities |
 | :--- | :--- | :--- |
 | **Arpit** | **Recognition Model Development** | 63D Single-Hand MLP, 144D Dual-Hand MLP architecture, ML diagnosis, and model training. |
 | **Sachin** | **Data Collection, Preprocessing & Backend Support** | Dataset extraction, landmark coordinate normalization, pipeline profiling, and backend engineering. |

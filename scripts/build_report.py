@@ -30,16 +30,20 @@ OUTPUT_PATH = os.path.join(REPO_ROOT, "docs/report/ISL_Alphabet_Recognition_Proj
 
 
 def strip_sample_body(doc: Document):
-    """Safely remove template sample body paragraphs after Section 1 break (P141) and sample table."""
+    """Safely remove template sample body paragraphs after Section 1 break and sample table."""
     body = doc._body._element
     elements_to_remove = []
-    p_count = 0
+    found_second_sectpr = False
+    sectpr_count = 0
     for child in list(body):
         tag = child.tag.split('}')[-1]
         if tag == 'p':
-            if p_count > 141:
+            if found_second_sectpr:
                 elements_to_remove.append(child)
-            p_count += 1
+            elif child.xpath('.//w:sectPr'):
+                sectpr_count += 1
+                if sectpr_count >= 2:
+                    found_second_sectpr = True
         elif tag == 'tbl':
             elements_to_remove.append(child)
 
@@ -122,13 +126,24 @@ def main():
     try:
         script = f'''
         tell application "Microsoft Word"
+            repeat with d in (get documents)
+                if name of d is "{os.path.basename(OUTPUT_PATH)}" then
+                    close d saving no
+                end if
+            end repeat
             open POSIX file "{OUTPUT_PATH}"
             set activeDoc to active document
+            try
+                repeat with aField in (get fields of activeDoc)
+                    update field aField
+                end repeat
+            end try
             save as activeDoc file name "{pdf_path}" file format format PDF
+            save activeDoc
             close activeDoc saving no
         end tell
         '''
-        res = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=30)
+        res = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=60)
         if res.returncode == 0 and os.path.exists(pdf_path):
             print(f"SUCCESS: Generated PDF report ({os.path.getsize(pdf_path):,} bytes).")
         else:

@@ -57,7 +57,7 @@ def build_chapter1(doc: Document):
         "with an appearance-based Convolutional Neural Network (CNN), the platform provides multi-modal perception. "
         "The system advances beyond raw character output by integrating a temporal WordBuffer state machine that "
         "assembles spelled letters into words, a multilingual translation engine supporting 10 regional Indian languages "
-        "with offline dictionary mapping and fallback, and a robust multi-tier speech fallback engine (pyttsx3, Edge-TTS, gTTS, "
+        "with offline dictionary mapping and fallback, and a robust multi-tier speech fallback engine (macOS say, pyttsx3, gTTS, "
         "and browser speech synthesis). Optional on-device neural translation (IndicTrans2) and speech synthesis (MMS-TTS) "
         "modules are also implemented in the codebase for offline research evaluation. "
         "This end-to-end prototype provides an accessible, private, and bidirectional communication tool for the Indian deaf community."

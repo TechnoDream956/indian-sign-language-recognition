@@ -15,7 +15,7 @@
 
 All metrics were computed using `src/evaluate.py`. 95% Confidence Intervals were computed via 1,000 empirical bootstrap iterations.
 
-### Clean Offline Benchmarks (Uncontaminated Estimates)
+### Clean Offline Benchmarks (Test-Data Independent Estimates)
 | Model | Architecture | Input Shape | Test Partition | Test Samples | Top-1 Accuracy [95% CI] | Top-3 Accuracy | Macro F1 [95% CI] | Brier Score |
 |---|---|---|---|---|---|---|---|---|
 | **ISL Dual-Hand Baseline Model** | Deep MLP + BatchNorm | `(None, 144)` | RealSign Same-Signer Held-Out (20 Classes) | 243 | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | 0.3565 |
@@ -25,14 +25,14 @@ All metrics were computed using `src/evaluate.py`. 95% Confidence Intervals were
 | **ISL Single-Hand Baseline** | Dense MLP | `(None, 63)` | Combined Alphabet Same-Signer Held-Out | 536 | **75.93%** [72.20%, 79.66%] | **86.19%** | **0.6032** [0.5530, 0.6351] | 0.3355 |
 | **ISL Dual-Hand Model (Full Split)** | Deep MLP + BatchNorm | `(None, 144)` | Full Held-Out Test (RealSign + OpenHands) | 252 | **75.79%** [70.24%, 80.95%] | **82.94%** | **0.6683** [0.6385, 0.6974] | 0.3842 |
 
-### Post-Hoc Heuristic Overrides (Contaminated Estimates)
+### Post-Hoc Heuristic Overrides (Test-Data Tuned Estimates)
 | Configuration | Architecture | Input Shape | Test Partition | Test Samples | Top-1 Accuracy | Macro F1 | Status & Validity |
 |---|---|---|---|---|:---:|:---:|---|
 | **Dual-Hand (+ K/T Override)** | Deep MLP + Heuristic | `(None, 144)` | RealSign Same-Signer Held-Out | 243 | **83.13%** | **0.7834** | *Possibly tuned on test data, not a clean estimate* |
 | **Multi-Modal Fused (+ K/T)** | Fused + Heuristic | `144D + 128x128` | RealSign Paired Test Subset | 243 | **83.13%** | **0.7834** | *Matches Geometry (+KT) alone (0.00% gain)* |
 
 > [!WARNING]  
-> **Contaminated Estimate Warning (K/T Override):**  
+> **Test-Data Tuned Warning (K/T Override):**  
 > The index finger orientation heuristic (`dy > 0.08 and dy > 1.2 * dx`) was formulated by inspecting Class K $\to$ Class T misclassifications during evaluation iterations. Because these thresholds were informed by the test partition, the +4.94% accuracy gain (78.19% $\to$ 83.13%) is **possibly tuned on test data and is not a clean estimate**.
 
 > [!NOTE]  
@@ -109,7 +109,7 @@ Evaluated on held-out test partitions to measure the effect of camera mirroring 
 | **RGB CNN (128x128x3)** | 780 same-signer samples | **79.87%** | **62.82%** | **-17.05% drop** |
 
 > [!IMPORTANT]  
-> All three models require unmirrored sensor inputs matching training perspective. Feeding horizontally flipped webcam images causes immediate prediction failure across landmark and visual modalities.
+> All three models require unmirrored sensor inputs matching training perspective. Feeding horizontally flipped webcam images causes immediate prediction failure across landmark and visual modalities. The mirror fix (`model_input_unmirrored=True`) routes unmirrored frames to models while preserving mirrored display for the user (validated on held-out landmark data only; live validation pending).
 
 ---
 

@@ -49,7 +49,7 @@ def build_chapter2(doc: Document):
         ("G-03", "Decision Fusion & Gating", "Fuse geometric skeletal landmarks with RGB appearance CNN features; filter transitional noise.", "W_geom=0.65, W_cnn=0.35; +0.10 agreement bonus; confidence threshold 0.50."),
         ("G-04", "Temporal Smoothing", "Implement an intelligent WordBuffer state machine with debouncing to assemble words hands-free.", "Cooldown debounce period of 1.2 s; 5-frame stability confirmation threshold; backspace & clear gestures."),
         ("G-05", "Multilingual Translation", "Translate assembled English phrases into 10 Indian regional languages with offline dictionary mapping.", "< 5 ms local dictionary lookup, zero cloud dependency for core phrases; optional IndicTrans2 neural module."),
-        ("G-06", "Speech Output", "Synthesize audible speech corresponding to translated regional text using multi-tier fallback.", "Sub-second response using pyttsx3, Edge-TTS, gTTS, or browser Web Speech API; optional Meta MMS-TTS module.")
+        ("G-06", "Speech Output", "Synthesize audible speech corresponding to translated regional text using multi-tier fallback.", "Sub-second response using macOS say, pyttsx3, gTTS, or browser Web Speech API; optional Meta MMS-TTS module.")
     ]
 
     for r_idx, row in enumerate(goals_data, start=1):
@@ -91,8 +91,8 @@ def build_chapter2(doc: Document):
         "combinatorial ISL alphabet, comprising a 26-class single-hand MLP (63D) and a 20-class dual-hand bimanual spatial MLP (144D); "
         "(2) training and integrating a visual appearance CNN (128x128x3) and confidence-aware decision fusion engine; "
         "(3) designing a temporal WordBuffer state machine with 1.2s debouncing and hands-free text manipulation; "
-        "(4) engineering a multi-tier speech fallback engine (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API) and 10-language Indic translation; "
-        "(5) diagnosing and fixing camera selfie mirroring (-48.97% drop) and 2-frame occlusion hysteresis; and "
+        "(4) engineering a multi-tier speech fallback engine (macOS say -> pyttsx3 -> gTTS -> Web Speech API) and 10-language Indic translation; "
+        "(5) diagnosing and fixing camera selfie mirroring (-48.97% drop on held-out landmark data; live validation pending) and 2-frame occlusion hysteresis; and "
         "(6) developing a modern desktop application (.app), Docker containerization, and an automated 245-test suite."
     )
 
@@ -117,7 +117,7 @@ def build_chapter2(doc: Document):
         "by Gala et al. (2023) introduced IndicTrans2, an open-source Transformer model supporting all 22 scheduled Indian languages. "
         "By utilizing the 200M distilled int8-quantized ONNX variant of IndicTrans2 as an optional offline module alongside local dictionary "
         "mapping, our platform enables accessible regional translation. Furthermore, speech synthesis is structured with a resilient "
-        "multi-tier fallback chain (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API), with Meta's Massively Multilingual Speech (MMS-TTS) "
+        "multi-tier fallback chain (macOS say -> pyttsx3 -> gTTS -> Web Speech API), with Meta's Massively Multilingual Speech (MMS-TTS) "
         "project by Pratap et al. (2024), utilizing the VITS architecture (Kim et al., 2021), implemented in the codebase as an optional "
         "neural waveform generation research service."
     )

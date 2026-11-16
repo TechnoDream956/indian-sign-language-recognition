@@ -505,7 +505,7 @@ def generate_er_diagram():
 
 
 def generate_forensics_diagram():
-    """Figure 7: Forensic Analysis of Class K -> T Collapse."""
+    """Figure 9: Forensic Analysis of Class K -> T Collapse."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.8), dpi=300)
 
     # 1. Bar chart of Finger Extensions (K train vs K test vs T train)
@@ -544,10 +544,12 @@ def generate_forensics_diagram():
     ax2.legend(fontsize=7.8, loc='center right')
     ax2.grid(axis='x', linestyle='--', alpha=0.5)
 
-    plt.suptitle("Figure 7: Forensic Root-Cause Analysis of Class K → Class T Classification Collapse", fontsize=10.5, fontweight='bold', y=1.02)
+    plt.suptitle("Figure 9: Forensic Root-Cause Analysis of Class K → Class T Classification Collapse", fontsize=10.5, fontweight='bold', y=1.02)
     plt.tight_layout()
-    out_path = os.path.join(FIGURES_DIR, "fig7_class_k_t_forensics.png")
+    out_path = os.path.join(FIGURES_DIR, "fig9_class_k_t_forensics.png")
     plt.savefig(out_path, dpi=300, bbox_inches='tight')
+    # Also save to old path for backward compatibility
+    plt.savefig(os.path.join(FIGURES_DIR, "fig7_class_k_t_forensics.png"), dpi=300, bbox_inches='tight')
     plt.close()
     print(f"Generated {out_path}")
 

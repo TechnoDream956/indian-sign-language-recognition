@@ -10,6 +10,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
+from docx.text.paragraph import Paragraph
 from .xml_helpers import style_table_cell, apply_table_borders
 from .team_config import (
     TEAM_MEMBERS,
@@ -196,31 +197,31 @@ def build_front_matter(doc: Document):
         ("LIST OF TABLES", "vi", "toc 1"),
         ("LIST OF FIGURES", "vii", "toc 1"),
         ("LIST OF ABBREVIATIONS", "viii", "toc 1"),
-        ("ABSTRACT", "ix", "toc 1"),
+        ("ABSTRACT", "viii", "toc 1"),
         ("1. INTRODUCTION", "1", "toc 1"),
-        ("1.1. Problem Statement", "2", "toc 2"),
+        ("1.1. Problem Statement", "3", "toc 2"),
         ("2. BACKGROUND RESEARCH", "4", "toc 1"),
         ("2.1. Objectives", "4", "toc 2"),
         ("2.2. Literature Review & Project Feasibility", "5", "toc 2"),
-        ("3. METHODOLOGY", "9", "toc 1"),
-        ("3.1. Proposed System Overview", "9", "toc 2"),
-        ("3.2. Users and Roles", "10", "toc 2"),
-        ("3.3. Detailed Workflow", "11", "toc 2"),
-        ("3.4. Design Diagrams", "13", "toc 2"),
-        ("3.4.1. Use-case Diagrams", "13", "toc 3"),
-        ("3.4.2. Class Diagrams", "15", "toc 3"),
+        ("3. METHODOLOGY", "10", "toc 1"),
+        ("3.1. Proposed System Overview", "10", "toc 2"),
+        ("3.2. Users and Roles", "11", "toc 2"),
+        ("3.3. Detailed Workflow", "12", "toc 2"),
+        ("3.4. Design Diagrams", "15", "toc 2"),
+        ("3.4.1. Use-case Diagrams", "15", "toc 3"),
+        ("3.4.2. Class Diagrams", "16", "toc 3"),
         ("3.4.3. ER Diagrams", "17", "toc 3"),
         ("3.5. User Interface", "18", "toc 2"),
         ("3.5.1. User Description and Interface Mockup", "18", "toc 3"),
-        ("3.6. System Implementation", "20", "toc 2"),
-        ("3.6.1. Algorithms/ Pseudo Code", "20", "toc 3"),
-        ("3.6.2. Source Code with Documentation", "23", "toc 3"),
-        ("3.6.3. Experimental Results, Ablation Studies, and Failure Diagnostics", "27", "toc 3"),
-        ("4. CONCLUSION", "33", "toc 1"),
-        ("4.1. Goals/ Vision", "33", "toc 2"),
-        ("4.2. Delivered Solution", "34", "toc 2"),
-        ("4.3. Remaining Work", "35", "toc 2"),
-        ("5. REFERENCES", "37", "toc 1")
+        ("3.6. System Implementation", "19", "toc 2"),
+        ("3.6.1. Algorithms/ Pseudo Code", "19", "toc 3"),
+        ("3.6.2. Source Code with Documentation", "22", "toc 3"),
+        ("3.6.3. Experimental Results, Ablation Studies, and Failure Diagnostics", "24", "toc 3"),
+        ("4. CONCLUSION", "30", "toc 1"),
+        ("4.1. Goals/ Vision", "30", "toc 2"),
+        ("4.2. Delivered Solution", "31", "toc 2"),
+        ("4.3. Remaining Work", "33", "toc 2"),
+        ("5. REFERENCES", "34", "toc 1")
     ]
 
     for idx, (title, page, style) in enumerate(toc_data):
@@ -254,11 +255,11 @@ def build_front_matter(doc: Document):
         p97.runs[0].bold = True
 
     tables_data = [
-        ("Table 1: System Goals and Quantitative Engineering Objectives", "4"),
-        ("Table 2: Comparative Literature Review of State-of-the-Art ISL Recognition Systems", "7"),
-        ("Table 3: Reconciled Held-Out Benchmark Performance Across Model Architectures", "28"),
-        ("Table 4: Per-Class Diagnostic Failure Modes and Biomechanical Root Causes", "30"),
-        ("Table 5: Real-Time Latency, Memory Footprint, and Runtime Resource Profiling", "32")
+        ("Table 1: System Goals and Quantitative Engineering Objectives", "5"),
+        ("Table 2: Comparative Literature Review of State-of-the-Art ISL Recognition Systems", "8"),
+        ("Table 3: Reconciled Held-Out Benchmark Performance Across Model Architectures", "24"),
+        ("Table 4: Per-Class Diagnostic Failure Modes and Biomechanical Root Causes", "26"),
+        ("Table 5: Real-Time Latency, Memory Footprint, and Runtime Resource Profiling", "30")
     ]
 
     p98 = doc.paragraphs[98]
@@ -292,29 +293,46 @@ def build_front_matter(doc: Document):
         p104.runs[0].bold = True
 
     figures_data = [
-        ("Figure 1: Multi-Modal Decision Fusion and Translation System Architecture", "9"),
-        ("Figure 2: Data Flow Diagrams (Level 0 Context and Level 1 Process Decomposition)", "11"),
-        ("Figure 3: Sequence Diagram of Live Prediction, Temporal Buffering, and Audio Synthesis", "12"),
-        ("Figure 4: UML Use-Case Diagram for System Actors and Functional Scenarios", "14"),
-        ("Figure 5: Detailed UML Class Diagram of the Software Subsystems", "16"),
-        ("Figure 6: Entity-Relationship & Dataset Schema Model", "17"),
-        ("Figure 7: Forensic Root-Cause Analysis of Class K → Class T Classification Collapse", "29"),
-        ("Figure 8: Reconciled Held-Out Benchmark Performance Across Dual-Hand Feature Architectures", "28"),
-        ("Figure 9: Real-Time User Interface with Live Video Overlay and Multilingual Buffer", "19"),
-        ("Figure 10: Biomechanical Skeletal Normalization and Cross-Hand Distortion Comparison", "31")
+        ("Figure 1: Multi-Modal Decision Fusion and Translation System Architecture", "11"),
+        ("Figure 2: Data Flow Diagrams (Level 0 Context and Level 1 Process Decomposition)", "14"),
+        ("Figure 3: Sequence Diagram of Live Prediction, Temporal Buffering, and Audio Synthesis", "15"),
+        ("Figure 4: UML Use-Case Diagram for System Actors and Functional Scenarios", "16"),
+        ("Figure 5: Detailed UML Class Diagram of the Software Subsystems", "17"),
+        ("Figure 6: Entity-Relationship & Dataset Schema Model", "18"),
+        ("Figure 7: Real-Time User Interface with Live Video Overlay and Multilingual Buffer", "19"),
+        ("Figure 8: Reconciled Held-Out Benchmark Performance Across Dual-Hand Feature Architectures", "26"),
+        ("Figure 9: Forensic Root-Cause Analysis of Class K → Class T Classification Collapse", "28"),
+        ("Figure 10: Biomechanical Skeletal Normalization and Cross-Hand Distortion Comparison", "29")
     ]
 
-    for idx, (title, page) in enumerate(figures_data[:8]):
+    # Populate the first min(len(figures_data), 8) into template paragraphs 105..112
+    for idx in range(min(len(figures_data), 8)):
+        title, page = figures_data[idx]
         target_p = doc.paragraphs[105 + idx]
         target_p.text = f"{title}\t{page}"
         for r in target_p.runs:
             r.font.name = 'Times New Roman'
             r.font.size = Pt(11)
 
+    # Insert any remaining figures beyond 8 into document xml
+    last_p = doc.paragraphs[112]
+    for idx in range(8, len(figures_data)):
+        title, page = figures_data[idx]
+        new_p_elm = OxmlElement('w:p')
+        last_p._p.addnext(new_p_elm)
+        new_p = Paragraph(new_p_elm, last_p._parent)
+        new_p.text = f"{title}\t{page}"
+        for r in new_p.runs:
+            r.font.name = 'Times New Roman'
+            r.font.size = Pt(11)
+        last_p = new_p
+
+    offset = max(0, len(figures_data) - 8)
+
     # -------------------------------------------------------------
-    # 6. LIST OF ABBREVIATIONS (Paragraphs 113-137)
+    # 6. LIST OF ABBREVIATIONS (Paragraphs 113+offset to 137+offset)
     # -------------------------------------------------------------
-    p113 = doc.paragraphs[113]
+    p113 = doc.paragraphs[113 + offset]
     p113.text = "LIST OF ABBREVIATIONS"
     p113.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if p113.runs:
@@ -322,7 +340,7 @@ def build_front_matter(doc: Document):
         p113.runs[0].font.size = Pt(16)
         p113.runs[0].bold = True
 
-    p114 = doc.paragraphs[114]
+    p114 = doc.paragraphs[114 + offset]
     p114.text = "Abbreviation\tExplanation of the Abbreviation"
     if p114.runs:
         p114.runs[0].font.name = 'Times New Roman'
@@ -355,24 +373,26 @@ def build_front_matter(doc: Document):
     ]
 
     for idx, (abbr, desc) in enumerate(abbrevs):
-        target_p = doc.paragraphs[115 + idx]
+        target_p = doc.paragraphs[115 + offset + idx]
         target_p.text = f"{abbr}\t\t\t\t\t\t{desc}"
         for r in target_p.runs:
             r.font.name = 'Times New Roman'
             r.font.size = Pt(10.5)
 
-    # Clear remaining abbreviation paragraphs up to 137
-    for idx in range(115 + len(abbrevs), 138):
+    # Clear remaining abbreviation paragraphs up to 137 + offset
+    for idx in range(115 + offset + len(abbrevs), 138 + offset):
         doc.paragraphs[idx].text = ""
 
     # -------------------------------------------------------------
-    # 7. ABSTRACT (Paragraphs 138-140, sectPr at 141)
+    # 7. ABSTRACT (Paragraphs 138+offset to 140+offset, sectPr at 141+offset)
     # -------------------------------------------------------------
-    p138 = doc.paragraphs[138]
+    p138 = doc.paragraphs[138 + offset]
     p138.text = "ABSTRACT"
     p138.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if p138.runs:
         p138.runs[0].font.name = 'Times New Roman'
+        p138.runs[0].font.size = Pt(16)
+        p138.runs[0].bold = True
         p138.runs[0].font.size = Pt(16)
         p138.runs[0].bold = True
 
@@ -393,26 +413,26 @@ def build_front_matter(doc: Document):
         "spelled characters into complete words without physical keyboard interaction.\n\n"
         "Downstream linguistic accessibility supports translation into 10 regional Indian languages via dictionary mapping "
         "with online fallback, while an int8-quantized IndicTrans2 model is implemented in the codebase as an optional offline "
-        "neural backend. Auditory feedback uses a multi-tier speech fallback chain (pyttsx3 -> Edge-TTS -> gTTS -> Web Speech API), "
+        "neural backend. Auditory feedback uses a multi-tier speech fallback chain (macOS say -> pyttsx3 -> gTTS -> Web Speech API), "
         "with Meta's Massively Multilingual Speech (MMS-TTS) implemented as an optional neural service.\n\n"
         "Offline empirical evaluation was conducted on controlled same-signer held-out test partitions. The clean dual-hand "
         "spatial MLP achieves 78.19% Top-1 accuracy and 0.7349 Macro F1 on the held-out test partition (N=243), while the paired "
         "visual CNN achieves 82.72% (0.7565 Macro F1). Multi-modal decision fusion without heuristic overrides matches the geometry "
         "baseline at 78.19%. A post-hoc K/T orientation override yielded 83.13% Top-1 accuracy (+4.94%), though this heuristic is "
         "possibly tuned on test data. An engineering diagnosis identified critical pipeline fragility: camera mirroring inverts coordinate "
-        "geometry, causing a 48.97% drop in accuracy (from 78.19% to 29.22%), while intermittent occlusion drops were mitigated using "
+        "geometry, causing a 48.97% drop in accuracy (from 78.19% to 29.22% on held-out landmark data; live validation pending), while intermittent occlusion drops were mitigated using "
         "a 2-frame temporal hysteresis filter (-85.7% flapping on a synthetic sequence). Formal live accuracy across novel signers remains "
         "pending future multi-signer benchmark recording."
     )
 
-    p139 = doc.paragraphs[139]
+    p139 = doc.paragraphs[139 + offset]
     p139.text = abstract_text
     p139.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     if p139.runs:
         p139.runs[0].font.name = 'Times New Roman'
         p139.runs[0].font.size = Pt(11.5)
 
-    doc.paragraphs[140].text = ""
+    doc.paragraphs[140 + offset].text = ""
     # Paragraph 141 has sectPr - PRESERVE WITHOUT ALTERING P_ELEMENT
 
     print("Front matter updated successfully.")

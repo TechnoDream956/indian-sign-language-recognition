@@ -89,7 +89,7 @@ The system is engineered as an end-to-end multimodal perception and translation 
 
 ### D. Multilingual Translation & Speech Synthesis (`src/translator.py` & `src/tts_engine.py`)
 - **Indic Translation:** Translates assembled English text into 10 regional Indian languages (Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati, Kannada, Malayalam, Punjabi, and English).
-- **Text-to-Speech Engine:** Leverages browser Web Speech API for native Indic voices, with offline macOS `say` execution fallback.
+- **Text-to-Speech Engine:** 4-tier fallback chain prioritizing low-latency macOS `say`, offline `pyttsx3`, online `gTTS`, and browser Web Speech API.
 
 ### E. Continuous Learning & Privacy Subsystem (`src/feedback_learning/`)
 - User-driven explicit sign correction interface.
