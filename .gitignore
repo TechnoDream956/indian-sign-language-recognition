@@ -66,6 +66,9 @@ data/translation_cache.json
 data/feedback/
 data/language_services/
 data/live_benchmark_samples/
+*.db
+*.sqlite
+*.sqlite3
 
 # Temporary files, Logs & Scratch
 logs/

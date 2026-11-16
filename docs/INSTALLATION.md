@@ -12,15 +12,17 @@ This guide details verified steps to install, configure, and run the **Indian Si
 
 ## 1. System Requirements
 
-| Component | macOS | Linux (Ubuntu / Debian) | Windows 10 / 11 |
+| Component | macOS (Verified Local Hardware) | Linux (Ubuntu / Debian)* | Windows 10 / 11* |
 | :--- | :--- | :--- | :--- |
-| **Operating System** | macOS 12+ (Monterey through Sequoia) | Ubuntu 20.04+ / Debian 11+ | Windows 10 / 11 (64-bit) |
+| **Operating System** | macOS 12+ (Apple Silicon M1–M4 / Intel) | Ubuntu 20.04+ / Debian 11+ | Windows 10 / 11 (64-bit) |
 | **Python Version** | Python 3.10 (3.9–3.11 supported) | Python 3.10 (3.9–3.11 supported) | Python 3.10 (3.9–3.11 supported) |
-| **Architecture** | Apple Silicon (M1–M4) / Intel x86_64 | x86_64 / ARM64 | x86_64 |
+| **Architecture** | Apple Silicon ARM64 / Intel x86_64 | x86_64 / ARM64 | x86_64 |
 | **Memory (RAM)** | 4 GB min (8 GB recommended) | 4 GB min (8 GB recommended) | 4 GB min (8 GB recommended) |
 | **Webcam** | Built-in or USB (720p 30fps) | UVC-compatible USB camera | DirectShow / Media Foundation camera |
 | **Audio Output** | Native `say` / `pyttsx3` / `afplay` | `espeak` / `aplay` / `paplay` | SAPI5 via `pyttsx3` / Browser speech |
 | **Disk Space** | ~2 GB free disk space | ~2 GB free disk space | ~2 GB free disk space |
+
+*\*Note on Platform Testing: macOS Apple Silicon is the primary development and verified execution environment. Linux and Windows paths are implemented with standard cross-platform APIs (`pathlib`, DirectShow, V4L2, SAPI5, eSpeak) but are **untested on physical Linux/Windows hardware**.*
 
 > [!IMPORTANT]
 > **Why Python 3.10 is Recommended:**  
@@ -30,7 +32,7 @@ This guide details verified steps to install, configure, and run the **Indian Si
 
 ## 2. Platform-Specific Setup
 
-### A. macOS (Apple Silicon & Intel)
+### A. macOS (Apple Silicon & Intel) — *Verified on Local Hardware*
 
 #### 1. Install Python 3.10 via Homebrew
 ```bash
@@ -48,7 +50,6 @@ source venv/bin/activate
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install pyttsx3 gTTS deep-translator
 ```
 
 #### 4. Camera Permissions on macOS
@@ -58,9 +59,11 @@ pip install pyttsx3 gTTS deep-translator
 
 ---
 
-### B. Linux (Ubuntu / Debian / Raspberry Pi OS 64-bit)
+### B. Linux (Ubuntu / Debian / Raspberry Pi OS 64-bit) — *Untested on Real Hardware*
 
 #### 1. Install System Prerequisites & Audio Drivers
+> [!NOTE]
+> Linux environments require `espeak` for offline `pyttsx3` speech synthesis and `libasound2-dev` / `pulseaudio-utils` for audio device routing.
 ```bash
 sudo apt update
 sudo apt install -y python3.10 python3.10-venv python3-pip \
@@ -85,14 +88,13 @@ source venv/bin/activate
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install pyttsx3 gTTS deep-translator
 ```
 
-Camera capture automatically utilizes Linux Video4Linux2 (`cv2.CAP_V4L2`), and TTS leverages `pyttsx3` (via eSpeak/speech-dispatcher) and `gTTS` with PulseAudio (`paplay`) / ALSA (`aplay`).
+Camera capture utilizes Linux Video4Linux2 (`cv2.CAP_V4L2`), and TTS leverages `pyttsx3` (via eSpeak/speech-dispatcher) and `gTTS` with PulseAudio (`paplay`) / ALSA (`aplay`).
 
 ---
 
-### C. Windows (Windows 10 / 11 64-bit)
+### C. Windows (Windows 10 / 11 64-bit) — *Untested on Real Hardware*
 
 #### 1. Install Python 3.10
 Download Python 3.10 from [python.org](https://www.python.org/downloads/release/python-31011/) or run via Windows Package Manager:
@@ -114,10 +116,20 @@ python -m venv venv
 ```powershell
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-pip install pyttsx3 gTTS deep-translator
 ```
 
 Camera capture utilizes Windows DirectShow (`cv2.CAP_DSHOW`) and Media Foundation (`cv2.CAP_MSMF`). Offline speech synthesis uses Microsoft SAPI5 voices via `pyttsx3` with automatic browser Web Speech API fallback.
+
+---
+
+### D. Docker Containerization (Optional) — *Untested on Live Daemon*
+A production `Dockerfile` is provided in the root repository. It bundles Python 3.10-slim with OpenCV, MediaPipe, `espeak`, and `ffmpeg` libraries.
+> [!NOTE]
+> Docker build is currently **untested on a live daemon** in this environment as the host Docker service is inactive.
+```bash
+docker build -t isl-recognition .
+docker run -p 5001:5001 --device=/dev/video0 isl-recognition
+```
 
 ---
 
@@ -148,7 +160,7 @@ python -m unittest discover -s tests
 
 **Expected Result:**
 ```text
-Ran 238 tests in ~30s
+Ran 245 tests in ~20-30s
 OK
 ```
 
@@ -176,12 +188,15 @@ Open your web browser to:
 
 ---
 
-## 6. TTS & Translation Fallback Architecture
+## 6. Subsystem Notes: Translation & Speech Fallbacks
 
-The system features an automatic 4-tier speech synthesis fallback chain:
-1. **Tier 1:** Native macOS `say` (macOS native voices: Rishi, Lekha, Piya, Vani, Geeta, Soumya)
-2. **Tier 2:** Offline cross-platform `pyttsx3` (Windows SAPI5, Linux eSpeak, macOS NSSpeechSynthesizer)
-3. **Tier 3:** High-fidelity `gTTS` + local audio player (`afplay` / `paplay` / `aplay` / `powershell`)
-4. **Tier 4:** Browser Web Speech API fallback (zero-configuration fallback for headless environments, Docker, and systems without local audio drivers)
+### Translation Limitations & Failure Modes:
+- **Online Service Rate Limits:** Real-time online translation uses the MyMemory API via `deep-translator`. Free-tier queries are subject to daily quota constraints (~1,000 words/day per IP). The engine applies exponential backoff retries on transient errors (HTTP 429, 502, 503).
+- **Offline Coverage:** Offline translation is strictly limited to the curated dictionary (common phrases, greetings, family, objects) and rule-based compound phrase connector assembly.
+- **What the User Sees on Failure:** If an unknown sentence is signed and online translation fails or is rate-limited, the system executes phonetic transliteration (e.g. converting Latin character phonetics into Devanagari, Bengali, Tamil, etc.). If transliteration is unavailable, the user sees the raw English text with an indicator toast. The application never crashes or outputs empty strings.
 
-Translation features online neural translation via MyMemory API with automatic exponential backoff retries and offline dictionary / transliteration fallback.
+### Speech Synthesis Fallback Tiers:
+1. **Tier 1 (macOS `say`):** Verified locally for English, Hindi, Marathi, Bengali, Tamil, Telugu, and Kannada.
+2. **Tier 2 (`pyttsx3`):** Verified locally on macOS for Gujarati, Malayalam, and Punjabi; serves as the primary offline engine for Windows (SAPI5) and Linux (`espeak`).
+3. **Tier 3 (`gTTS`):** High-fidelity cloud MP3 generation with local audio player playback (`afplay`/`paplay`/`aplay`/`powershell`).
+4. **Tier 4 (Browser Web Speech API):** Client-side speech synthesis used automatically in headless/containerized environments or when local audio output devices are missing.

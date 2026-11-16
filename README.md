@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/TechnoDream956/indian-sign-language-recognition/actions"><img src="https://img.shields.io/badge/Tests-235%20Passing-brightgreen?style=flat-square&logo=github-actions&logoColor=white" alt="Tests" /></a>
+  <a href="https://github.com/TechnoDream956/indian-sign-language-recognition/actions"><img src="https://img.shields.io/badge/Code%20Tests-245%20Passing-brightgreen?style=flat-square&logo=github-actions&logoColor=white" alt="Code Tests: 245 Passing" /></a>
   <a href="https://www.python.org/downloads/release/python-31012/"><img src="https://img.shields.io/badge/Python-3.10-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.10" /></a>
   <a href="https://developers.google.com/mediapipe"><img src="https://img.shields.io/badge/MediaPipe-0.10.21-00C7B7?style=flat-square&logo=google&logoColor=white" alt="MediaPipe" /></a>
   <a href="https://www.tensorflow.org/"><img src="https://img.shields.io/badge/TensorFlow-2.16.2-FF6F00?style=flat-square&logo=tensorflow&logoColor=white" alt="TensorFlow" /></a>
@@ -16,26 +16,32 @@
 
 ---
 
+## 👥 Project Team & Mandatory Attribution
+
+| Contributor | Mandatory Team Role | Subsystem Contributions |
+| :--- | :--- | :--- |
+| **Arpit** | **Recognition Model Development** | Single-Hand 63D MLP, Dual-Hand 144D MLP architecture, ML diagnosis, and model training. |
+| **Sachin** | **Data Collection, Preprocessing & Backend Support** | Dataset extraction, landmark coordinate normalization, pipeline profiling, and backend engineering. |
+| **Abhu** | **Multilingual Support & TTS** | 10-language translation dictionary, MyMemory API integration, and multi-tier TTS fallback chain. |
+| **Yash** | **Frontend & Deployment** | Local desktop overhaul, macOS application bundle (`ISL Translator.app`), and responsive dark UI. |
+
+---
+
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
 - [Desktop Application Execution](#-desktop-application-execution)
 - [System Architecture](#-system-architecture)
-  - [Processing Pipeline](#processing-pipeline)
-  - [Cloud Webcam Architecture](#cloud-webcam-architecture)
 - [Key Features](#-key-features)
-  - [Computer Vision & Landmark Perception](#1-computer-vision--landmark-perception)
-  - [Performance & Adaptive Streaming](#2-performance--adaptive-streaming)
-  - [Language Composition & Translation](#3-language-composition--translation)
-  - [User Interface & Workspace](#4-user-interface--workspace)
-- [Model Hierarchy & Research Separation](#-model-hierarchy--research-separation)
+- [Model Hierarchy & Performance (Same-Signer Held-Out)](#-model-hierarchy--performance-same-signer-held-out)
+- [ML Engineering Diagnosis & Radical Honesty on Live Performance](#-ml-engineering-diagnosis--radical-honesty-on-live-performance)
+- [Hardware Latency Benchmarks](#-hardware-latency-benchmarks)
 - [Interface Walkthrough & Visual Tour](#-interface-walkthrough--visual-tour)
 - [Technology Stack](#-technology-stack)
 - [Repository Structure](#-repository-structure)
 - [Installation & Local Setup](#-installation--local-setup)
 - [Production Deployment](#-production-deployment)
-  - [Local Desktop Architecture (Primary)](#local-desktop-architecture-primary)
-  - [Docker Containerization (Optional)](#docker-containerization-optional)
+- [Subsystem Failure Modes & Safety Guarantees](#-subsystem-failure-modes--safety-guarantees)
 - [API Reference](#-api-reference)
 - [Testing & Quality Assurance](#-testing--quality-assurance)
 - [Current System Limitations](#-current-system-limitations)
@@ -195,18 +201,68 @@ This platform uses a **Cloud Browser Webcam Ingestion Pattern**:
 
 ---
 
-## 🔬 Model Hierarchy & Research Separation
+## 🔬 Model Hierarchy & Performance (Same-Signer Held-Out)
 
-To maintain rigorous scientific standards, this repository strictly separates the **active production models** from **controlled experimental research**:
+To maintain rigorous scientific standards, all model performance metrics are evaluated strictly on held-out test partitions and explicitly designated as **same-signer held-out** (intra-signer consistency, not clinical generalization across arbitrary novel signers). 95% Confidence Intervals are computed via 1,000 bootstrap iterations (`src/evaluate.py`).
 
-| Tier | File Path | Input Shape | Classes | Status | Description |
-| :--- | :--- | :---: | :---: | :---: | :--- |
-| **Production Baseline (Landmark)** | `models/alphabet_model_26class.h5` | **63D** | **26** (A–Z) | **Active in Live App** | Feedforward Dense MLP ($128 \to 64 \to 32 \to 26$). Normalized 3D coordinates relative to wrist. |
-| **Production Baseline (Visual CNN)** | `models/cnn_sign_model.h5` | **$128 \times 128 \times 3$** | **26** (A–Z) | **Active in Live App** | 2D Convolutional network evaluating square RGB crops derived from hand bounding boxes. |
-| **Integrated Dual-Hand Model** | `models/experimental/phase5b2_prompt23_class_k/.../best_val_model.h5` | **144D** | **20** | **Integrated** | Dual-hand bimanual classifier evaluating 126D landmark coordinates + relative wrist spatial vectors. |
-| **Experimental: Aperture Model** | `models/experimental/phase5b1_features/Exp_C_Aperture132D_seed42.h5` | **132D** | **21** | **Research Track** | Evaluates thumb-index aperture distances to resolve morphological sign collisions ($Q \leftrightarrow B$). |
-| **Experimental: Two-Stream** | `models/experimental/phase5a_two_stream/Exp_C_TwoStream_NoSpatialAug_seed42.h5` | **129D** | **21** | **Research Track** | Spatial-aware two-stream bimanual sign evaluation. |
-| **Dynamic Words (Retired)** | *Decommissioned from live app* | $30 \times 1662\text{D}$ | 13 / 29 | **Historical Archive** | MoP-GRU continuous word models retired to focus exclusively on alphabet fingerspelling. |
+| Model Tier | Architecture & Input | Target Classes | Same-Signer Held-Out Partition | Top-1 Accuracy [95% CI] | Top-3 Accuracy | Macro F1 [95% CI] | Operational Status |
+| :--- | :--- | :---: | :--- | :---: | :---: | :---: | :--- |
+| **Integrated Dual-Hand Model** | Deep MLP + BatchNorm (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | Integrated Pipeline |
+| **Dual-Hand (+ K/T Orientation Override)** | Deep MLP + Heuristic (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **83.13%** [78.19%, 87.65%] | **84.36%** | **0.7834** [0.7394, 0.8190] | **Default Active** |
+| **Dual-Hand (Full Test Split)** | Deep MLP + BatchNorm (`144D`) | **20** Bimanual | Full Split (RealSign + OpenHands N=252) | **75.79%** [70.24%, 80.95%] | **82.94%** | **0.6683** [0.6385, 0.6974] | Benchmark Reference |
+| **Single-Hand Baseline** | Dense MLP ($128\to64\to32$, `63D`) | **26** (A–Z) | Combined Alphabet Held-Out (N=536) | **75.93%** [72.20%, 79.66%] | **86.19%** | **0.6032** [0.5530, 0.6351] | **Active Baseline** |
+| **RGB Visual CNN** | 4-Block Conv2D + GAP ($128\times128\times3$) | **26** (A–Z) | RealSign Image Held-Out (N=780) | **79.87%** [77.05%, 82.69%] | **80.77%** | **0.7474** [0.7361, 0.7567] | **Active Multi-Modal** |
+| **Paired Decision Fusion** | Landmark Prior + CNN Agreement | **20** Bimanual | Paired Same-Signer Subset (N=243) | **83.13%** [78.19%, 87.65%] | **84.36%** | **0.7834** [0.7394, 0.8190] | **Active Decision Engine** |
+
+> [!NOTE]  
+> **Reconciliation of Test Partition Size (252 vs 243):**  
+> `sample_ids_test.npy` contains 252 total samples: 243 from the RealSign dataset and 9 from OpenHands. On the 243 RealSign samples (where feature scale normalization matches training), the model achieves 78.19% (83.13% with K/T override). On the 9 OpenHands samples, the model achieves 11.11% (1/9) due to $L_\infty$ span bounding-box vs wrist-to-middle-MCP scale divergence documented in `docs/DIAGNOSIS.md`.  
+> The 20 dual-hand target classes are: `A, B, D, E, F, G, H, I, K, M, N, P, Q, R, S, T, W, X, Y, Z`. Letters `C, J, L, O, U, V` are strictly unimanual in standard Indian Sign Language and are routed to the 26-class single-hand pathway.
+
+---
+
+## 🔍 ML Engineering Diagnosis & Radical Honesty on Live Performance
+
+While offline evaluation on controlled held-out splits exhibits high accuracy (78%–83%), live real-time webcam recognition was observed to be noticeably weaker in initial tests. A rigorous engineering diagnosis (`docs/DIAGNOSIS.md`) confirmed three distinct root causes backed by measured empirical data:
+
+1. **Camera Mirroring Coordinate Collapse (-48.97% Accuracy Drop):**  
+   - *Finding:* Training datasets (`RealSign`, `OpenHands`) consist of third-person frontal images (observer perspective). When a live application flips webcam frames (`cv2.flip(frame, 1)`) for a natural "selfie mirror" view without transforming coordinates back, coordinate geometry is inverted.
+   - *Measured Drop:* Inverting coordinates on the 243-sample held-out test set collapsed dual-hand accuracy from **78.19% to 29.22%** (**-48.97% drop**), and single-hand accuracy from **75.93% to 12.31%** (**-63.62% drop**).
+   - *Fix Applied:* The inference pipeline now passes raw unmirrored frames to MediaPipe and CNN models (`model_input_unmirrored=True`), while OpenCV drawing mirrors display coordinates exclusively for the user UI.
+2. **Hand Occlusion Dropout & Pipeline Flapping (Resolved via 2-Frame Hysteresis):**  
+   - *Finding:* In two-handed signs where hands touch or overlap (`B`, `D`, `P`, `M`), MediaPipe Hands intermittently fails to detect both hands for 1–2 frames, dropping reported hand count from 2 to 1 and prematurely resetting the debounce stability counter.
+   - *Fix Applied:* Added a 2-frame hysteresis hold (`hand_drop_grace_frames=2`) that carries forward the occluded hand's last known position for up to 2 frames before falling back to single-hand mode.
+   - *Measured Result:* Tested on an intermittent 50-frame dropout sequence, reducing pipeline flapping by **85.7%** (from 7 switches to 1).
+3. **Single-Signer Domain Shift & Need for Multi-Signer Training:**  
+   - *Finding:* Audited via `tools/audit/leakage_audit.py`. While train/val/test splits have **0.0% ID overlap**, all samples in `RealSign` originate from the same signer under identical studio lighting. When tested on novel signers with differing hand sizes, joint elasticity, and lighting conditions, prediction confidence drops. Future retraining cycles must incorporate multi-signer datasets.
+
+---
+
+## ⏱️ Measured Hardware Latency Benchmarks
+
+Measured on **Apple Silicon M2 (CPU)** using `src/benchmark_latency.py`:
+
+### Section A: Component & Inference-Only Latency (Excludes Sensor Capture & Drawing)
+| Component | Median Latency | Mean Latency | p95 Latency | Throughput (FPS) | Scope & Coverage |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **Dual-Hand 144D Feature Extraction** | **0.08 ms** | 0.08 ms | 0.09 ms | 11,880 FPS | Vector cross-products, wrist-to-MCP scaling, angle features. |
+| **Dual-Hand MLP Prediction** | **2.91 ms** | 2.91 ms | 3.01 ms | 343 FPS | 144D input $\to$ 20-class softmax probabilities. |
+| **Single-Hand MLP Prediction** | **1.81 ms** | 1.86 ms | 2.07 ms | 538 FPS | 63D input $\to$ 26-class softmax probabilities. |
+| **RGB Visual CNN Prediction** | **8.91 ms** | 9.91 ms | 14.58 ms | 100 FPS | Hand bounding-box crop $\to$ $128\times128\times3$ Conv2D. |
+| **Multi-Modal Decision Fusion** | **< 0.01 ms** | < 0.01 ms | < 0.01 ms | > 600,000 FPS | Confidence-weighted agreement arbitration. |
+| **AlphabetEngine Dual-Hand Decision** | **14.62 ms** | 14.84 ms | 15.84 ms | 67 FPS | Landmark extraction + MLP + CNN + WordBuffer latching. |
+
+### Section B: True Full End-to-End Pipeline (`InferenceEngine.process_frame`)
+*(Sensor Ingestion $\to$ Orientation Unmirror $\to$ MediaPipe Tracking $\to$ Landmark Normalization $\to$ Model Inference $\to$ Decision Fusion $\to$ OpenCV HUD Drawing $\to$ JPEG Compression)*
+| Pipeline Mode | Median Latency | Mean Latency | p95 Latency | Sustained Throughput | Scope & Coverage |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **Empty Frame (No Hands Detected)** | **13.23 ms** | 13.28 ms | 13.56 ms | **75.3 FPS** | Standby frame rendering + JPEG encoding. |
+| **Active Dual-Hand Frame** | **39.99 ms** | 44.16 ms | 53.96 ms | **22.6 FPS** | Complete end-to-end multi-modal pipeline with live visual HUD. |
+
+> [!NOTE]  
+> **Statistical Distribution & Tail Skew:** Arithmetic mean latency can approach or slightly exceed p95 due to right-tail skew caused by infrequent OS thread context switching, Apple Silicon frequency scaling transitions, or Python garbage collection pauses (captured in p99 and max). Median represents sustained throughput.
+
+---
 
 ---
 
@@ -552,7 +608,7 @@ source venv/bin/activate
 ### Verified Test Results
 
 ```text
-Ran 118 tests in 5.875s
+Ran 245 tests in 22.284s
 
 OK
 ```
@@ -566,6 +622,8 @@ OK
 | `test_alphabet_26class_matrix.py` | Confusion matrix computation and per-class top-1 / top-3 recall. | Verification |
 | `test_alphabet_translation.py` | Curated lexicon lookups, MyMemory translation fallback, transliteration. | Unit |
 | `test_dual_hand_alphabet.py` | 144D feature extraction, wrist relative vectors, and bimanual safety. | Integration |
+| `test_mirror_parity_and_pipeline.py` | Unmirrored coordinate verification and orientation config flag. | Parity |
+| `test_cross_platform_and_tts.py` | Multi-tier TTS fallback chain, translation retry backoff, camera probes. | Reliability |
 | `test_cloud_camera.py` | Headless environment detection, `/api/camera/frame` payload handling. | Integration |
 | `test_flask_alphabet_integration.py` | REST API routes, JSON response schemas, and error codes. | API Contract |
 | `test_paths_helper.py` | Workspace root resolution and relative path integrity. | Unit |
@@ -573,7 +631,23 @@ OK
 | `test_e2e_alphabet_validation.py` | End-to-end pipeline from landmark input to translated output. | End-to-End |
 
 > [!NOTE]
-> **Evaluation Distinction:** Automated unit tests verify software functionality and mathematical correctness. They should not be conflated with formal multi-signer clinical accuracy benchmarks. Real-world gesture accuracy depends on ambient lighting, user signing precision, and camera framing.
+> **Evaluation Distinction:** Automated unit tests verify software functionality and mathematical contracts (245 code tests). They should not be conflated with formal multi-signer clinical accuracy benchmarks. Real-world gesture accuracy depends on ambient lighting, user signing precision, and camera framing.
+
+---
+
+## 🛡️ Subsystem Failure Modes & Safety Guarantees
+
+### Translation Subsystem Guarantees
+- **MyMemory Online Rate Limits:** The online translation fallback operates via MyMemory API with an academic quota (~1,000 words/day per IP). The engine applies automatic exponential backoff retries (`0.25s * 2^attempt`) on transient errors (HTTP 429, 502, 503).
+- **Offline Lexicon Scope:** Offline mode strictly covers the curated dictionary of everyday vocabulary, greetings, and multi-word phrases plus phonetic transliteration.
+- **User Experience on Failure:** When an unlisted sentence fails online translation, the system converts phonetic syllables into the target script (e.g. Devanagari, Bengali, Tamil). If transliteration is unavailable, the user sees the original English text accompanied by an informative UI toast. The application **never crashes or returns empty text**.
+
+### Speech Synthesis (TTS) Fallback Chain
+- **Tier 1 (macOS `say`):** Native speech synthesis verified locally on Apple Silicon for English, Hindi, Marathi, Bengali, Tamil, Telugu, and Kannada.
+- **Tier 2 (`pyttsx3`):** Offline SAPI5 / eSpeak / NSSpeechSynthesizer verified locally for Gujarati, Malayalam, and Punjabi.
+- **Tier 3 (`gTTS`):** Cloud-assisted MP3 generation with local audio playback (`afplay`/`paplay`/`aplay`/`powershell`).
+- **Tier 4 (Browser Web Speech API):** Automatic client-side audio generation used when running in headless/Docker environments or when physical audio drivers are absent.
+- *\*Note: Linux and Windows audio and camera pipelines are implemented with standard cross-platform libraries but remain untested on physical Linux/Windows hardware.*
 
 ---
 
