@@ -29,12 +29,12 @@ def build_chapter4(doc: Document):
 
     add_body_p(
         doc,
-        "Throughout this research, our technical focus underwent necessary maturation. While initial milestones explored "
-        "whole-sign dynamic sequence classification (Word Mode using MoP-GRU), data audits demonstrated that vocabulary-limited "
-        "word models cannot support open-ended communication. Consequently, the project pivoted toward mastering the 26-letter "
-        "ISL fingerspelling alphabet—a combinatorial medium enabling signers to spell any word, proper noun, or technical term. "
-        "Reaching this vision demanded addressing bimanual occlusions, enforcing bilateral spatial invariance, and coupling "
-        "machine learning predictions with an intelligent temporal state machine."
+        "Throughout this research, our technical focus underwent necessary maturation. While initial exploration examined "
+        "whole-sign dynamic sequence classification using the upstream MoP-GRU architecture, our assistive system goals required "
+        "supporting open-ended communication where users can spell proper nouns, personal names, and technical terms. "
+        "Consequently, the project focused on the 26-letter ISL fingerspelling alphabet. Realizing this system demanded "
+        "engineering a bilateral-invariant two-hand feature representation, integrating a visual appearance CNN branch with decision fusion, "
+        "and coupling neural predictions with an intelligent temporal WordBuffer state machine."
     )
 
     add_body_p(

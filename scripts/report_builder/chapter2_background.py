@@ -73,17 +73,19 @@ def build_chapter2(doc: Document):
 
     add_body_p(
         doc,
-        "Sign Language Recognition systems typically bifurcate into Word-Level Continuous Recognition and Isolated "
-        "Alphabet Fingerspelling. In word-level recognition, models classify predefined full-word gestures (e.g., 'Hello', 'Help', 'Water'). "
-        "The foundation of our initial exploratory phase was inspired by the MediaPipe-Optimized Gated Recurrent Unit (MoP-GRU) architecture "
-        "by Barathi Subramanian et al. (2022). In accordance with the MIT License, our work preserves the original copyright notice. "
-        "Subramanian et al. demonstrated that recurrent cells could classify dynamic temporal trajectories from skeletal sequences "
-        "(preserved in legacy/mopgru_cell.py, legacy/collect_keypoints.py, legacy/preprocess_keypoints.py, legacy/realtime_inference.py, "
-        "and legacy/train_word_model.py; the original word-level checkpoints are kept locally and not in the repository). "
-        "However, whole-sign models suffer from limited vocabulary coverage (typically 10–50 signs). In real-world assistive "
-        "scenarios, signers frequently communicate proper nouns, personal names, locations, technical terminology, and open-ended "
-        "phrases that do not exist in fixed vocabularies. This realization motivated our technical transition to the 26-letter "
-        "ISL fingerspelling alphabet."
+        "Sign Language Recognition systems broadly encompass word-level gesture recognition and fingerspelling alphabet recognition. "
+        "In word-level recognition, models classify temporal gesture sequences for specific vocabulary words. The foundation of our "
+        "initial exploratory phase was inspired by the MediaPipe-Optimized Gated Recurrent Unit (MoP-GRU) architecture by Barathi "
+        "Subramanian et al. (2022). In their published paper, Subramanian et al. evaluated MoP-GRU across three datasets: an author-collected "
+        "real-time dataset of 13 dynamic ISL word gestures (\"There are 13 sign gestures in the dataset, as described in Table 1\", "
+        "achieving 95% test accuracy), the Argentinian LSA64 dataset (64 gestures, achieving 99.92%), and the Word-Level American "
+        "Sign Language benchmark WLASL100 (achieving 63.18% top-1 accuracy in Table 6). In the authors' released open-source "
+        "repository, the training script (preserved in legacy/collect_keypoints.py and legacy/mopgru_cell.py) configures these 13 word classes. "
+        "In contrast to dynamic word-sequence modeling, our research focuses on the 26-letter ISL fingerspelling alphabet, "
+        "enabling signers to spell open-ended vocabulary, proper names, and technical terms. Our contributions center on addressing bimanual "
+        "occlusions through a bilateral-invariant 144D skeletal representation, adding a visual appearance CNN branch, implementing "
+        "decision fusion, developing a WordBuffer temporal state machine to assemble spelled characters into complete words, "
+        "and providing 10-language Indic translation and speech synthesis."
     )
 
     add_body_p(
@@ -120,7 +122,7 @@ def build_chapter2(doc: Document):
         table2.rows[0].cells[idx].text = h
 
     lit_data = [
-        ("Subramanian et al. (2022)", "MediaPipe Holistic + Gated Recurrent Unit (MoP-GRU)", "RGB Camera (Skeletal Landmarks)", "Dynamic ISL Word Sequences", "Not directly comparable (different task)", "Evaluated whole-word dynamic sequences using full-body skeletal keypoints (1,662 features per frame) rather than isolated fingerspelling alphabet; no translation or speech output."),
+        ("Subramanian et al. (2022)", "MediaPipe Holistic + Gated Recurrent Unit (MoP-GRU)", "RGB Camera (Skeletal Landmarks)", "13 Dynamic ISL Words; LSA64; WLASL100", "Not directly comparable (different task)", "Evaluated dynamic word sequences using full-body skeletal keypoints (1,662 features per frame); released training script uses 13 word classes; does not include text translation or speech output."),
         ("Adaloglou et al. (2022)", "Comparative 3D-CNN (I3D, ResNet3D) vs Skeletal GCN", "RGB Video & 2D/3D Landmarks", "Continuous Sign Glosses", "Not directly comparable (different task: continuous sign language recognition on PHOENIX-14T / GSL, evaluated by Word Error Rate)", "Continuous gloss sequence recognition rather than isolated alphabet fingerspelling; high computational overhead requiring discrete GPUs."),
         ("Gala et al. (2023)", "IndicTrans2: 200M Distilled Quantized Transformer", "Text Token Sequences (En -> Indic)", "22 Scheduled Indian Languages", "Not directly comparable (different task: text-to-text machine translation on IN22-Gen benchmark, evaluated by chrF++ and BLEU)", "Text-to-text translation only; evaluated on general domain sentences; implemented in src/language_services/ as an optional offline module."),
         ("Pratap et al. (2024)", "Meta MMS-TTS: VITS End-to-End Neural Speech", "Phonemic / Text Sequences", "1,000+ Global Languages", "Not directly comparable (different task: evaluates acoustic speech synthesis naturalness and character error rate across 1,107 speech models)", "Acoustic speech synthesis from text tokens; implemented in src/language_services/ as an optional neural speech module."),

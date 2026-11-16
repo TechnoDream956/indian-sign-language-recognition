@@ -195,5 +195,5 @@ The repository maintains an automated test suite verifying model loading, geomet
 
 ## 📜 Upstream Attribution & License
 
-- **Upstream Work:** This repository originated as a research fork of the MoP-GRU dynamic word recognition project by Barathi Subramanian et al. (2022). The original GRU sequence scripts and training utilities are preserved in `legacy/` under their original MIT License terms.
+- **Upstream Work:** This repository originated as a research fork of the MoP-GRU dynamic sign recognition project by Barathi Subramanian et al. (2022) (*Scientific Reports*, DOI: `10.1038/s41598-022-15998-7`). In the paper, the authors evaluated MoP-GRU on a 13-word ISL dataset, LSA64, and WLASL100; the released training scripts in `legacy/` configure these 13 word classes and are preserved under their original MIT License terms.
 - **License:** Licensed under the [MIT License](LICENSE). Copyright (c) 2022 Barathi Subramanian. All extensions, fixes, and documentation Copyright (c) 2025–2026 the Project Contributors.
