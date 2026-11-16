@@ -231,9 +231,18 @@ class TTSEngine:
         return None
 
     def _find_pyttsx3_voice(self, language: str) -> Optional[str]:
-        """Find a compatible pyttsx3 voice ID for the given language."""
+        """
+        Find a compatible pyttsx3 voice ID for the given language.
+        On macOS, languages with no authentic named native voice (Gujarati, Punjabi, Malayalam)
+        are explicitly bypassed so execution falls through to Tier 3 (gTTS) rather than producing
+        incomprehensible English-accented phonetic artifacts.
+        """
+        if sys.platform.startswith("darwin") and language in ["Gujarati", "Punjabi", "Malayalam"]:
+            return None
+
         if not self._pyttsx3_available or self._pyttsx3_engine is None:
             return None
+
         hints = PYTTSX3_LANG_HINTS.get(language, ["en"])
         try:
             voices = self._pyttsx3_engine.getProperty("voices")
@@ -241,7 +250,9 @@ class TTSEngine:
                 v_id = str(getattr(v, "id", "")).lower()
                 v_name = str(getattr(v, "name", "")).lower()
                 for hint in hints:
-                    if hint in v_id or hint in v_name:
+                    # Require token boundary so 'pa' does not match 'compact' and 'gu' does not match 'portuguese'
+                    pattern = rf"(?:^|[._\-\s]){hint}(?:[._\-\s]|$)"
+                    if re.search(pattern, v_id) or re.search(pattern, v_name):
                         return getattr(v, "id")
         except Exception:
             pass
@@ -371,19 +382,19 @@ class TTSEngine:
                         logger.warning("[TTS Tier 1 Failed] macOS say error: %s", e)
 
                 # -------------------------------------------------------------
-                # Tier 2: pyttsx3
+                # Tier 2: pyttsx3 (Only attempted if a valid matching voice was found)
                 # -------------------------------------------------------------
                 if self._pyttsx3_available and self._pyttsx3_engine is not None:
-                    try:
-                        v_id = self._find_pyttsx3_voice(language)
-                        if v_id:
+                    v_id = self._find_pyttsx3_voice(language)
+                    if v_id is not None:
+                        try:
                             self._pyttsx3_engine.setProperty("voice", v_id)
-                        self._pyttsx3_engine.setProperty("rate", 170)
-                        self._pyttsx3_engine.say(text)
-                        self._pyttsx3_engine.runAndWait()
-                        return
-                    except Exception as e:
-                        logger.warning("[TTS Tier 2 Failed] pyttsx3 execution error: %s", e)
+                            self._pyttsx3_engine.setProperty("rate", 170)
+                            self._pyttsx3_engine.say(text)
+                            self._pyttsx3_engine.runAndWait()
+                            return
+                        except Exception as e:
+                            logger.warning("[TTS Tier 2 Failed] pyttsx3 execution error: %s", e)
 
                 # -------------------------------------------------------------
                 # Tier 3: gTTS + Local Audio Player

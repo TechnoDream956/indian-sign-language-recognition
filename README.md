@@ -205,18 +205,26 @@ This platform uses a **Cloud Browser Webcam Ingestion Pattern**:
 
 To maintain rigorous scientific standards, all model performance metrics are evaluated strictly on held-out test partitions and explicitly designated as **same-signer held-out** (intra-signer consistency, not clinical generalization across arbitrary novel signers). 95% Confidence Intervals are computed via 1,000 bootstrap iterations (`src/evaluate.py`).
 
+### Clean Offline Benchmarks (Uncontaminated Estimates)
 | Model Tier | Architecture & Input | Target Classes | Same-Signer Held-Out Partition | Top-1 Accuracy [95% CI] | Top-3 Accuracy | Macro F1 [95% CI] | Operational Status |
 | :--- | :--- | :---: | :--- | :---: | :---: | :---: | :--- |
-| **Integrated Dual-Hand Model** | Deep MLP + BatchNorm (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | Integrated Pipeline |
-| **Dual-Hand (+ K/T Orientation Override)** | Deep MLP + Heuristic (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **83.13%** [78.19%, 87.65%]* | **84.36%** | **0.7834** [0.7394, 0.8190]* | **Default Active** |
+| **Integrated Dual-Hand Model** | Deep MLP + BatchNorm (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | Clean Baseline Prior |
+| **RGB Visual CNN (Paired)** | 4-Block Conv2D + GAP ($128\times128\times3$) | **20** Bimanual | RealSign Paired Subset (N=243) | **82.72%** [77.78%, 87.24%] | — | **0.7565** [0.7180, 0.7925] | Clean Visual Prior |
+| **RGB Visual CNN (Full)** | 4-Block Conv2D + GAP ($128\times128\times3$) | **26** (A–Z) | RealSign Image Held-Out (N=780) | **79.87%** [77.05%, 82.69%] | **80.77%** | **0.7474** [0.7361, 0.7567] | Active Multi-Modal |
+| **Paired Decision Fusion (WITHOUT K/T)** | Landmark Prior + CNN Agreement | **20** Bimanual | Paired Same-Signer Subset (N=243) | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | Matches Baseline (0% gain) |
+| **Single-Hand Baseline** | Dense MLP ($128\to64\to32$, `63D`) | **26** (A–Z) | Combined Alphabet Held-Out (N=536) | **75.93%** [72.20%, 79.66%] | **86.19%** | **0.6032** [0.5530, 0.6351] | Active Baseline |
 | **Dual-Hand (Full Test Split)** | Deep MLP + BatchNorm (`144D`) | **20** Bimanual | Full Split (RealSign + OpenHands N=252) | **75.79%** [70.24%, 80.95%] | **82.94%** | **0.6683** [0.6385, 0.6974] | Benchmark Reference |
-| **Single-Hand Baseline** | Dense MLP ($128\to64\to32$, `63D`) | **26** (A–Z) | Combined Alphabet Held-Out (N=536) | **75.93%** [72.20%, 79.66%] | **86.19%** | **0.6032** [0.5530, 0.6351] | **Active Baseline** |
-| **RGB Visual CNN** | 4-Block Conv2D + GAP ($128\times128\times3$) | **26** (A–Z) | RealSign Image Held-Out (N=780) | **79.87%** [77.05%, 82.69%] | **80.77%** | **0.7474** [0.7361, 0.7567] | **Active Multi-Modal** |
-| **Paired Decision Fusion** | Landmark Prior + CNN Agreement | **20** Bimanual | Paired Same-Signer Subset (N=243) | **83.13%** [78.19%, 87.65%]* | **84.36%** | **0.7834** [0.7394, 0.8190]* | Matches Best Branch (0% gain)* |
 
-*\*Decision Fusion Honesty: Multi-modal fusion matches the best single branch (83.13% Geometry+KT vs 82.72% CNN alone) and does not improve accuracy. When branches disagree (45 samples, 18.52%), both are wrong >91% of the time (Geom+KT acc 8.89%, CNN acc 6.67%, Fused acc 8.89%), and fusion defaults to the landmark prior.*  
-*\*K/T Override Tuning Note: Threshold was formulated while inspecting evaluation misclassifications; this +4.94% gain is possibly tuned on test data.*  
-*\*Near-Duplicate Check: Removing the 4.5% near-duplicate samples (1-NN Euclidean distance < 0.10, N=232) yields 77.16% baseline, 82.33% with K/T override, 81.90% CNN alone, and 82.33% fused, confirming metrics are stable.*
+### Post-Hoc Heuristic Overrides (Contaminated Estimates)
+| Model Configuration | Architecture & Input | Target Classes | Same-Signer Held-Out Partition | Top-1 Accuracy | Macro F1 | Methodological Status |
+| :--- | :--- | :---: | :--- | :---: | :---: | :--- |
+| **Dual-Hand (+ K/T Override)** | Deep MLP + Heuristic (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **83.13%** | **0.7834** | *Possibly tuned on test data, not a clean estimate* |
+| **Paired Decision Fusion (+ K/T)** | Landmark Prior + CNN + Heuristic | **20** Bimanual | Paired Same-Signer Subset (N=243) | **83.13%** | **0.7834** | *Matches Geometry (+KT) alone (0% gain)* |
+
+*\*Decision Fusion Honesty: Multi-modal decision fusion matches the best single branch and does not improve accuracy (78.19% fused vs 82.72% CNN without K/T; 83.13% fused vs 83.13% Geometry+KT).*  
+*\*K/T Override Warning: The orientation threshold (`dy > 0.08 and dy > 1.2 * dx`) was formulated by inspecting Class K $\to$ T errors on this held-out set; this +4.94% gain is **possibly tuned on test data, not a clean estimate**, and the associated McNemar p-value is methodologically invalid.*  
+*\*Agreement Analysis: When branches AGREE (198 of 243, 81.48%), accuracy is 100.0%. When branches DISAGREE (45 of 243, 18.52%), Geometry is right on 4 (8.89%), CNN on 3 (6.67%), and NEITHER is right on 38 (84.4%).*  
+*\*Near-Duplicate Check: Removing the 4.5% near-duplicate samples (1-NN distance < 0.10, N=232) yields 77.16% baseline, 81.90% CNN alone, 77.16% fused without K/T, and 82.33% with K/T override, confirming stability.*
 
 > [!NOTE]  
 > **Reconciliation of Test Partition Size (252 vs 243):**  
@@ -648,11 +656,11 @@ OK
 
 ### Speech Synthesis (TTS) Fallback Chain
 - **Tier 1 (macOS `say`):** Native speech synthesis verified locally on Apple Silicon for English, Hindi, Marathi, Bengali, Tamil, Telugu, and Kannada via system synthesis calls.
-- **Tier 2 (`pyttsx3`):** Offline SAPI5 / eSpeak / NSSpeechSynthesizer verified locally on Apple Silicon via system synthesis calls (`nsss` AppKit backend); SAPI5 on Windows and `espeak` on Linux are **untested on real hardware**.
-- **Tier 3 (`gTTS`):** Cloud-assisted MP3 generation with local audio playback (`afplay` verified on macOS; `paplay`/`aplay` on Linux and `powershell` on Windows are **untested on real hardware**).
-- **Tier 4 (Browser Web Speech API):** Automatic client-side audio generation used when running in headless/Docker environments or when physical audio drivers are absent.
-- *\*Note on TTS Verification: Synthesis calls succeeded without error; audible phonetic correctness is unverified by human ear. While macOS lacks a dedicated named Malayalam system voice in `say -v '?'`, the `nsss` engine in `pyttsx3` accepted the Malayalam string at Tier 2 without raising an exception.*
-- *\*Note on Model Redistribution: Redistribution rights for model checkpoints trained on RealSign, OpenHands, and Ayesha are **unknown** (retained under academic fair use for education/reproducibility; commercial/public distribution rights unverified).*
+- **Tier 2 (`pyttsx3`):** Offline SAPI5 / eSpeak where matching regional voices are installed. On macOS, languages lacking an authentic named native voice (**Gujarati, Punjabi, Malayalam**) explicitly bypass pyttsx3 to avoid unnatural English-accented phonetic artifacts; Windows/Linux paths are **untested on real hardware**.
+- **Tier 3 (`gTTS`):** Preferred primary tier for **Gujarati, Punjabi, and Malayalam** on macOS and high-fidelity cloud MP3 fallback for all Indic languages, with local audio playback (`afplay` verified on macOS; `paplay`/`aplay` on Linux and `powershell` on Windows are **untested on real hardware**).
+- **Tier 4 (Browser Web Speech API):** Automatic client-side audio generation used when running in headless/Docker environments, offline without native voices, or when physical audio drivers are absent.
+- *\*Audible Correctness Notice: Audible correctness is unverified until a human checks it. Automated test suites verify process exit code 0 and non-empty audio generation without exceptions.*
+- *\*Dataset Licensing & Model Redistribution: Upstream dataset licenses are unverified; trained weights are included for educational reproducibility; confirm before making the repository public.*
 
 ---
 
@@ -668,7 +676,7 @@ To ensure transparency and academic integrity, known constraints are documented 
 
 ---
 
-## 🗺️ Roadmap & Ongoing Research
+## 🗺️ Roadmap, Remaining Work & Research Hypotheses
 
 ```mermaid
 flowchart LR
@@ -693,6 +701,11 @@ flowchart LR
 - [ ] **Phase 5: Complete Dual-Hand Integration (In Progress)** — Transitioning experimental 144D bimanual models into default production dispatch for complex signs (A, B, D, etc.).
 - [ ] **Phase 6: Dynamic Temporal Sequence Modeling (Planned)** — Training Bidirectional GRU (BiGRU) networks on 30-frame gesture sequences for word-level signs.
 - [ ] **Phase 7: Human-in-the-Loop Active Learning (Planned)** — Opt-in user correction capture for iterative model fine-tuning and signer personalization.
+
+### Hypotheses to Test on Live Multi-Signer Data
+- **Disagreement-Gated Uncertainty (Hypothesis):** When landmark geometry and visual CNN branches disagree (45 of 243 samples), neither branch is correct 84.4% of the time (38/45). Displaying an explicit "Uncertain / Re-sign" state when branches diverge could suppress 84.4% of spurious transitions in live operation. **This is a hypothesis to be tested on live multi-signer data, not an established result.**
+- **Multi-Signer Robustness:** Training across multiple diverse signers to eliminate the single-signer intra-recording bias present in RealSign.
+- **Auditory Verification:** Completing human ear listening audits for all 10 languages across all deployed speaker environments.
 
 ---
 

@@ -84,18 +84,18 @@ Every finding in this report is backed by **measured, reproducible empirical dat
 ---
 
 ### Root Cause 5: Heuristic Overrides Ablation & McNemar Significance Test
-- **Status:** **MEASURED & STATISTICALLY VALIDATED (POSSIBLY TUNED ON TEST DATA)**
+- **Status:** **MEASURED & METHODOLOGICALLY INVALID AS HYPOTHESIS TEST (TEST-DATA TUNING)**
 - **Empirical Results on 243 Same-Signer Held-Out Test Samples:**
-  - **Baseline Model-Only (No Heuristics):** Accuracy = **78.19%**, Macro F1 = **0.7349**
-  - **With K vs T Override:** Accuracy = **83.13% (+4.94%)**, Macro F1 = **0.7834 (+0.0485)** *(Note: The geometric rule `dy > 0.08 and dy > 1.2 * dx` was formulated by inspecting misclassified held-out evaluation samples; this gain is **possibly tuned on test data**).*
+  - **Clean Baseline Model-Only (No Heuristics):** Accuracy = **78.19%**, Macro F1 = **0.7349**
+  - **With K vs T Override:** Accuracy = **83.13% (+4.94%)**, Macro F1 = **0.7834 (+0.0485)** *(Note: The geometric rule `dy > 0.08 and dy > 1.2 * dx` was formulated by inspecting misclassified held-out evaluation samples; this gain is **possibly tuned on test data and is not a clean estimate**).*
   - **With B/H Heuristic Clamp:** Accuracy = **72.02% (-6.17%)**, Macro F1 = **0.6281 (-0.1068)**
 - **Paired McNemar Test (Baseline vs K/T Override):**
   - Both Correct: 187
   - Baseline Correct, K/T Override Wrong: 3
   - Baseline Wrong, K/T Override Correct: 15
   - Both Wrong: 38
-  - **McNemar $\chi^2$ Statistic:** **6.7222**
-  - **Exact Binomial $p$-value:** **0.007538** ($p < 0.01$, statistically significant).
+  - **Nominal McNemar $\chi^2$:** **6.7222**, Nominal Binomial $p$-value: **0.007538**
+  - **Validity Warning:** **INVALID as a confirmatory hypothesis test** because the heuristic was derived after inspecting test-set misclassifications.
 - **Architecture Config:**  
   Gated K/T override behind `enable_kt_override: bool = True` (active) and B/H clamp behind `enable_bh_clamp: bool = False` (inactive) in `AlphabetEngine`.
 
@@ -118,22 +118,23 @@ Evaluated on the exact same 243 same-signer held-out samples where paired raw la
 
 | Modality / Architecture | Top-1 Accuracy | Macro F1 | Performance vs Best Single Branch |
 |---|:---:|:---:|---|
-| **Geometry-Only Baseline (144D MLP)** | 78.19% | 0.7349 | Dual-hand landmark geometry alone |
-| **Geometry-Only (+ K/T Override)** | 83.13% | 0.7834 | Disambiguates active index finger (*possibly tuned on test data*) |
-| **RGB CNN-Only (128x128x3 Conv2D)** | 82.72% | 0.7565 | Cropped visual texture alone |
-| **Multi-Modal Fused (Geometry + CNN)** | **83.13%** | **0.7834** | **Matches best single branch (0.00% gain over Geometry+KT)** |
+| **Geometry Baseline (144D MLP)** | **78.19%** | **0.7349** | Clean dual-hand landmark geometry alone |
+| **RGB CNN Alone (128x128x3 Conv2D)** | **82.72%** | **0.7565** | Clean cropped visual texture alone |
+| **Multi-Modal Fused (WITHOUT K/T)** | **78.19%** | **0.7349** | Combined decision fusion (matches Geometry prior) |
+| *Geometry (+ K/T Override)* | *83.13%* | *0.7834* | *Post-hoc heuristic (possibly tuned on test data)* |
+| *Multi-Modal Fused (+ K/T Override)* | *83.13%* | *0.7834* | *Matches best single branch (0.00% gain)* |
 
 > [!IMPORTANT]  
 > **Honest Assessment of Decision Fusion:**  
-> On this same-signer held-out test set, multi-modal decision fusion **matches the best single branch (83.13%) and does NOT improve accuracy over Geometry (+ K/T override)**. CNN alone achieves 82.72% and Geometry(+KT) achieves 83.13%.
+> On this same-signer held-out test set, multi-modal decision fusion **does NOT improve accuracy over the best single branch**. Without K/T override, fusion achieves 78.19% (matching Geometry baseline 78.19%, while CNN alone achieves 82.72%). With K/T override, fusion matches the single branch at 83.13%.
 
 ### Disagreement Analysis (When Branches Disagree)
 - On the 243 test samples, the Geometry(+KT) branch and CNN branch disagree on **45 samples (18.52%)**.
-- **Accuracy on Disagreement Subset (N=45):**
-  - **Geometry(+KT) Alone:** **8.89%** (4 / 45)
-  - **CNN Alone:** **6.67%** (3 / 45)
-  - **Fused Decision:** **8.89%** (4 / 45)
-- **Interpretation:** When the two models disagree, both are wrong on >91% of frames due to heavy bimanual occlusion or non-canonical finger overlaps. Fusion falls back to the landmark prior and cannot recover the correct label.
+- Because the two models predict different classes, they cannot both be correct on any disagreement sample:
+  - **Geometry is right (and CNN wrong):** **4 of 45 (8.89%)**
+  - **CNN is right (and Geometry wrong):** **3 of 45 (6.67%)**
+  - **Neither is right:** **38 of 45 (84.4%)**
+- **Interpretation:** In 38 of the 45 disagreement cases (84.4%), both modalities fail simultaneously due to severe bimanual occlusion or non-canonical finger overlaps. Fusion falls back to the landmark prior (achieving 8.89% on the disagreement subset) and cannot rescue predictions when both underlying representations fail.
 
 ---
 
@@ -141,8 +142,9 @@ Evaluated on the exact same 243 same-signer held-out samples where paired raw la
 
 1. **Camera Mirror Parity:** Defaulted `model_input_unmirrored=True` so MediaPipe and CNN receive training-aligned coordinates while mirroring is preserved for user display.
 2. **Hand-Count Hysteresis:** Added 2-frame temporal grace period in `AlphabetEngine.process_dual_landmarks`, preventing pipeline flapping during hand occlusion (evaluated on a synthetic 50-frame dropout sequence, not real recordings).
-3. **Statistical Significance Validation:** Proved K/T disambiguation is statistically significant ($p = 0.0075$) via McNemar test (noting it is possibly tuned on test data) and gated B/H clamp off.
+3. **Statistical Significance Validation:** Evaluated K/T disambiguation and documented that while nominally $\chi^2 = 6.7222$, the hypothesis test is invalid due to test-data tuning.
 4. **Reproducible Evaluation Suite:** Created `src/evaluate.py` with 95% bootstrap confidence intervals, paired fusion ablation, and mirror parity checks.
 5. **Latency Benchmarking Suite:** Created `src/benchmark_latency.py` distinguishing component inference vs full end-to-end `InferenceEngine.process_frame`.
 6. **Live Data Collection & Benchmark Tool:** Created `tools/collection/record_live_benchmark_samples.py`.
+7. **Full Test Suite Integrity:** All **245 tests** pass cleanly.
 7. **Full Test Suite Integrity:** All **237 tests** pass cleanly.

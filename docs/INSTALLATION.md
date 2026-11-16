@@ -196,11 +196,25 @@ Open your web browser to:
 - **What the User Sees on Failure:** If an unknown sentence is signed and online translation fails or is rate-limited, the system executes phonetic transliteration (e.g. converting Latin character phonetics into Devanagari, Bengali, Tamil, etc.). If transliteration is unavailable, the user sees the raw English text with an indicator toast. The application never crashes or outputs empty strings.
 
 ### Speech Synthesis Fallback Tiers:
-1. **Tier 1 (macOS `say`):** Verified locally on macOS for English, Hindi, Marathi, Bengali, Tamil, Telugu, and Kannada via system synthesis calls.
-2. **Tier 2 (`pyttsx3`):** Verified locally on macOS Apple Silicon via system synthesis calls (`nsss` AppKit backend); SAPI5 on Windows and `espeak` on Linux are **untested on real hardware**.
-3. **Tier 3 (`gTTS`):** High-fidelity cloud MP3 generation with local audio player playback (`afplay` on macOS; `paplay`/`aplay` on Linux and `powershell` on Windows are **untested on real hardware**).
-4. **Tier 4 (Browser Web Speech API):** Client-side speech synthesis used automatically in headless/containerized environments or when local audio output devices are missing.
+1. **Tier 1 (macOS `say`):** Verified locally on macOS for English, Hindi, Marathi, Bengali, Tamil, Telugu, and Kannada via native system synthesis calls (`say -v <voice>`).
+2. **Tier 2 (`pyttsx3`):** Offline SAPI5 (Windows) and `espeak` (Linux) where a matching language voice is installed. On macOS, languages lacking an authentic named native voice (**Gujarati, Punjabi, Malayalam**) explicitly bypass pyttsx3 and route directly to Tier 3 (gTTS) to avoid incomprehensible English-accented phonetic artifacts. Note: Windows and Linux paths are **untested on real hardware**.
+3. **Tier 3 (`gTTS`):** Preferred primary tier for **Gujarati, Punjabi, and Malayalam** on macOS and robust online fallback for all Indic languages, producing natural regional speech via cloud audio streaming and local playback (`afplay` on macOS; Linux `paplay`/`aplay` and Windows `powershell` are **untested on real hardware**).
+4. **Tier 4 (Browser Web Speech API):** Client-side speech synthesis used automatically in headless/containerized environments, offline fallback without native voices, or when local audio output devices are missing.
 
-> [!NOTE]  
-> **Verification Methodology & Malayalam Voice Note:**  
-> Local TTS testing verified that synthesis process calls returned 0 without throwing an exception and generated valid audio streams (audible phonetic correctness unverified by human ear). While macOS `say -v '?'` does not list a dedicated named Malayalam system voice, the macOS `nsss` Cocoa synthesis bridge in `pyttsx3` accepted the Malayalam Unicode string without raising an error, succeeding at the process level at Tier 2. For verified phonetic clarity in Malayalam, Tier 3 (`gTTS`) or browser-side synthesis is recommended.
+> [!IMPORTANT]  
+> **Audible Correctness Notice:**  
+> **Audible phonetic correctness is completely unverified until a human checks it.** Automated testing only verifies that the underlying system process exits with code 0 and non-empty audio files are created without raising runtime exceptions.
+
+### Manual Audio Listening Verification Checklist
+Before deploying or demonstrating regional speech synthesis, a human evaluator should complete the following auditory verification checklist:
+- [ ] **English:** Audio plays cleanly via macOS `Rishi` (clear Indian-English phonetics).
+- [ ] **Hindi:** Audio plays cleanly via macOS `Lekha` (natural Devanagari pronunciation).
+- [ ] **Marathi:** Audio plays cleanly via macOS `Lekha` (Devanagari pronunciation).
+- [ ] **Bengali:** Audio plays cleanly via macOS `Piya` (authentic Bengali phonology).
+- [ ] **Tamil:** Audio plays cleanly via macOS `Vani` (authentic Tamil phonology).
+- [ ] **Telugu:** Audio plays cleanly via macOS `Geeta` (authentic Telugu phonology).
+- [ ] **Kannada:** Audio plays cleanly via macOS `Soumya` (authentic Kannada phonology).
+- [ ] **Gujarati:** Verify speech plays via Tier 3 `gTTS` (`gTTS_gu`) or browser Web Speech; confirm native Gujarati phonetic pronunciation (no English phonetic distortion).
+- [ ] **Malayalam:** Verify speech plays via Tier 3 `gTTS` (`gTTS_ml`) or browser Web Speech; confirm native Malayalam phonetic pronunciation.
+- [ ] **Punjabi:** Verify speech plays via Tier 3 `gTTS` (`gTTS_pa`) or browser Web Speech; confirm native Gurmukhi phonetic pronunciation.
+- [ ] **Volume & Latency:** Audio plays within 200 ms of phrase completion without clipping, stuttering, or speaker distortion.

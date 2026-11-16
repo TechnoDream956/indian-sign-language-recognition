@@ -85,7 +85,7 @@ def build_chapter4(doc: Document):
 
     add_bullet_p(
         doc,
-        "An exhaustive suite of 87 automated unit, regression, and integration tests covering inference logic, debounce timing, "
+        "An exhaustive suite of 245 automated unit, regression, and integration tests covering inference logic, debounce timing, "
         "translation accuracy, and API endpoints, maintaining a 100% pass rate under continuous integration.",
         bold_prefix="6. Automated Quality Assurance: "
     )
@@ -136,6 +136,15 @@ def build_chapter4(doc: Document):
         "Quantize the entire pipeline for mobile hardware by compiling the MediaPipe perception graph and neural models into "
         "Apple CoreML (iOS) and TensorFlow Lite (Android), enabling direct smartphones deployment for deaf individuals in the field.",
         bold_prefix="5. Mobile Edge Deployment (iOS & Android): "
+    )
+
+    add_bullet_p(
+        doc,
+        "Empirical evaluation revealed that when landmark geometry and visual CNN branches disagree (45 of 243 samples), neither branch "
+        "is correct 84.4% of the time (38/45). We formulate the hypothesis that gating or displaying an explicit 'Uncertain / Re-sign' status "
+        "when branches diverge could suppress spurious letter insertions. This represents a research hypothesis to be tested on live "
+        "multi-signer recordings, not an established result.",
+        bold_prefix="6. Disagreement-Gated Uncertainty Output (Hypothesis): "
     )
 
     print("Chapter 4 generated successfully.")

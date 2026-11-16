@@ -375,11 +375,13 @@ def build_chapter3(doc: Document):
 
     add_body_p(
         doc,
-        "Paired Multi-Modal Fusion and Disagreement Analysis: Evaluated on the 243 paired held-out samples, Geometry(+KT) achieved 83.13% "
-        "and CNN alone achieved 82.72%. Multi-modal decision fusion matched the best single branch at 83.13% and did not improve accuracy. "
-        "Crucially, the two branches disagreed on 45 out of 243 samples (18.52%). On this disagreement subset, Geometry(+KT) accuracy was "
-        "8.89% (4/45), CNN accuracy was 6.67% (3/45), and Fused accuracy was 8.89% (4/45). When the branches disagree, both are wrong on over "
-        "91% of frames due to extreme hand occlusions or resting-pose overlaps, and the fusion engine defaults to the landmark prior."
+        "Paired Multi-Modal Fusion, Agreement and Disagreement Analysis: Evaluated on the 243 paired held-out samples, Geometry baseline "
+        "achieved 78.19% and CNN alone achieved 82.72%. Multi-modal decision fusion without K/T override matched the Geometry prior at 78.19% "
+        "(0.00% gain), and with K/T override matched Geometry(+KT) at 83.13% (0.00% gain). Crucially, the two branches agreed on 198 out of "
+        "243 samples (81.48%), achieving 100.0% accuracy on this agreement subset. On the 45 samples where the branches disagreed (18.52%), "
+        "they cannot both be correct: Geometry was correct on 4 samples (8.89%), CNN was correct on 3 samples (6.67%), and neither was correct "
+        "on 38 samples (84.4%). Because the fusion engine defaults to the landmark prior when confidence is split, fusion cannot rescue "
+        "predictions when both underlying representations fail."
     )
 
     # Insert Figure 8 (Benchmark Ablation)

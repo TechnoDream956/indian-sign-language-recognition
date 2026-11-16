@@ -15,60 +15,76 @@
 
 All metrics were computed using `src/evaluate.py`. 95% Confidence Intervals were computed via 1,000 empirical bootstrap iterations.
 
+### Clean Offline Benchmarks (Uncontaminated Estimates)
 | Model | Architecture | Input Shape | Test Partition | Test Samples | Top-1 Accuracy [95% CI] | Top-3 Accuracy | Macro F1 [95% CI] | Brier Score |
 |---|---|---|---|---|---|---|---|---|
-| **ISL Dual-Hand Model (Full)** | Deep MLP + BatchNorm | `(None, 144)` | Full Held-Out Test (RealSign + OpenHands) | 252 | **75.79%** [70.24%, 80.95%] | **82.94%** | **0.6683** [0.6385, 0.6974] | 0.3842 |
-| **ISL Dual-Hand Model** | Deep MLP + BatchNorm | `(None, 144)` | RealSign Same-Signer Held-Out (20 Classes) | 243 | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | 0.3565 |
-| **ISL Dual-Hand (+ K/T Override)** | Deep MLP + Heuristic | `(None, 144)` | RealSign Same-Signer Held-Out (20 Classes) | 243 | **83.13%** [78.19%, 87.65%]* | **84.36%** | **0.7834** [0.7394, 0.8190]* | 0.3565 |
+| **ISL Dual-Hand Baseline Model** | Deep MLP + BatchNorm | `(None, 144)` | RealSign Same-Signer Held-Out (20 Classes) | 243 | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | 0.3565 |
+| **ISL RGB CNN Classifier** | 4-Block Conv2D + GAP | `(None, 128, 128, 3)` | RealSign Paired Test Subset (20 Classes) | 243 | **82.72%** [77.78%, 87.24%] | — | **0.7565** [0.7180, 0.7925] | — |
+| **ISL RGB CNN Classifier (Full)** | 4-Block Conv2D + GAP | `(None, 128, 128, 3)` | RealSign Image Held-Out (26 Classes) | 780 | **79.87%** [77.05%, 82.69%] | **80.77%** | **0.7474** [0.7361, 0.7567] | — |
+| **Multi-Modal Fused (WITHOUT K/T)** | Landmark Prior + CNN Agreement | `144D + 128x128` | RealSign Paired Test Subset (20 Classes) | 243 | **78.19%** [72.43%, 83.13%] | **84.36%** | **0.7349** [0.7067, 0.7558] | — |
 | **ISL Single-Hand Baseline** | Dense MLP | `(None, 63)` | Combined Alphabet Same-Signer Held-Out | 536 | **75.93%** [72.20%, 79.66%] | **86.19%** | **0.6032** [0.5530, 0.6351] | 0.3355 |
-| **ISL RGB CNN Classifier** | 4-Block Conv2D + GAP | `(None, 128, 128, 3)` | RealSign Same-Signer Held-Out Test Set | 780 | **79.87%** [77.05%, 82.69%] | **80.77%** | **0.7474** [0.7361, 0.7567] | — |
+| **ISL Dual-Hand Model (Full Split)** | Deep MLP + BatchNorm | `(None, 144)` | Full Held-Out Test (RealSign + OpenHands) | 252 | **75.79%** [70.24%, 80.95%] | **82.94%** | **0.6683** [0.6385, 0.6974] | 0.3842 |
 
-*\*Note on K/T Override: Heuristic thresholds were formulated while inspecting Class K misclassifications during research iterations; this +4.94% gain is **possibly tuned on test data**.*
+### Post-Hoc Heuristic Overrides (Contaminated Estimates)
+| Configuration | Architecture | Input Shape | Test Partition | Test Samples | Top-1 Accuracy | Macro F1 | Status & Validity |
+|---|---|---|---|---|:---:|:---:|---|
+| **Dual-Hand (+ K/T Override)** | Deep MLP + Heuristic | `(None, 144)` | RealSign Same-Signer Held-Out | 243 | **83.13%** | **0.7834** | *Possibly tuned on test data, not a clean estimate* |
+| **Multi-Modal Fused (+ K/T)** | Fused + Heuristic | `144D + 128x128` | RealSign Paired Test Subset | 243 | **83.13%** | **0.7834** | *Matches Geometry (+KT) alone (0.00% gain)* |
+
+> [!WARNING]  
+> **Contaminated Estimate Warning (K/T Override):**  
+> The index finger orientation heuristic (`dy > 0.08 and dy > 1.2 * dx`) was formulated by inspecting Class K $\to$ Class T misclassifications during evaluation iterations. Because these thresholds were informed by the test partition, the +4.94% accuracy gain (78.19% $\to$ 83.13%) is **possibly tuned on test data and is not a clean estimate**.
 
 > [!NOTE]  
 > **Reconciliation of Test Partition Size (252 vs 243):**
-> `sample_ids_test.npy` contains 252 total samples: 243 from the RealSign dataset and 9 from OpenHands. On the 243 RealSign samples (where feature scale normalization matches training), the model achieves 78.19% (83.13% with K/T override). On the 9 OpenHands samples, the model achieves 11.11% (1/9) due to the $L_\infty$ bounding box vs wrist-to-middle-MCP scale divergence documented in `docs/DIAGNOSIS.md`.
+> `sample_ids_test.npy` contains 252 total samples: 243 from the RealSign dataset and 9 from OpenHands. On the 243 RealSign samples (where feature scale normalization matches training), the clean baseline achieves 78.19%. On the 9 OpenHands samples, the model achieves 11.11% (1/9) due to the $L_\infty$ bounding box vs wrist-to-middle-MCP scale divergence documented in `docs/DIAGNOSIS.md`.
 > The 20 dual-hand target classes are: `A, B, D, E, F, G, H, I, K, M, N, P, Q, R, S, T, W, X, Y, Z`. Letters `C, J, L, O, U, V` are strictly unimanual in standard Indian Sign Language and are routed to the 26-class single-hand pathway.
 
 ### Near-Duplicate Sensitivity Analysis (Nearest-Neighbor Distance Check)
 
-To ensure performance is not an artifact of temporally adjacent or near-identical video frames in the held-out partition, pairwise Euclidean 1-NN distances in normalized 144D feature space to the training set were computed. Samples with 1-NN distance $< 0.10$ are classified as near-duplicates (11 samples, 4.53% of the 243 RealSign test set).
+To ensure performance is not an artifact of temporally adjacent video frames in the held-out partition, pairwise Euclidean 1-NN distances in normalized 144D feature space to the training set were computed. Samples with 1-NN distance $< 0.10$ are classified as near-duplicates (11 samples, 4.53% of the 243 RealSign test set).
 
-| Evaluation Set | Samples (N) | Baseline 144D MLP Acc | Geometry (+ K/T Override) Acc | CNN Alone Acc | Fused Decision Acc | Macro F1 (Baseline / +KT) |
+| Evaluation Set | Samples (N) | Clean Baseline 144D Acc | CNN Alone Acc | Fused (without K/T) Acc | Geometry (+ K/T)* Acc | Fused (+ K/T)* Acc |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Full RealSign Held-Out** | 243 | **78.19%** | **83.13%** | **82.72%** | **83.13%** | 0.7349 / 0.7834 |
-| **Clean Non-Duplicate Subset** (1-NN dist $\ge 0.10$) | 232 | **77.16%** | **82.33%** | **81.90%** | **82.33%** | 0.7349 / 0.7834 |
+| **Full RealSign Held-Out** | 243 | **78.19%** | **82.72%** | **78.19%** | 83.13%* | 83.13%* |
+| **Clean Non-Duplicate Subset** (1-NN dist $\ge 0.10$) | 232 | **77.16%** | **81.90%** | **77.16%** | 82.33%* | 82.33%* |
 
-*Conclusion:* Removing the 4.5% near-duplicate samples results in a negligible ~1.0% change in Top-1 accuracy (78.19% $\to$ 77.16% baseline; 83.13% $\to$ 82.33% with K/T override), demonstrating that performance reflects genuine skeletal patterns rather than duplicate frame memorization.
+*\*Note: K/T override numbers are possibly tuned on test data.*  
+*Conclusion:* Removing the 4.5% near-duplicate samples results in a negligible ~1.0% change in Top-1 accuracy (78.19% $\to$ 77.16% baseline; 82.72% $\to$ 81.90% CNN alone), demonstrating that performance reflects genuine skeletal/visual patterns rather than duplicate frame memorization.
 
 ---
 
-## 2. Paired Multi-Modal Fusion Ablation & Disagreement Analysis
+## 2. Paired Multi-Modal Fusion, Agreement & Disagreement Analysis
 
 Evaluated on the exact same 243 same-signer held-out samples where paired raw landmarks and cropped RGB images both exist:
 
 | Modality / Architecture | Top-1 Accuracy | Macro F1 | Performance vs Best Single Branch |
 |---|:---:|:---:|---|
-| **Geometry-Only Baseline (144D MLP)** | 78.19% | 0.7349 | Dual-hand landmark geometry alone |
-| **Geometry-Only (+ K/T Override)** | 83.13% | 0.7834 | Disambiguates active index finger (*possibly tuned on test data*) |
-| **RGB CNN-Only (128x128x3 Conv2D)** | 82.72% | 0.7565 | Cropped visual texture alone |
-| **Multi-Modal Fused (Geometry + CNN)** | **83.13%** | **0.7834** | **Matches best single branch (0.00% gain over Geometry+KT)** |
+| **Geometry Baseline (144D MLP)** | **78.19%** | **0.7349** | Clean landmark geometry alone |
+| **RGB CNN Alone (128x128x3 Conv2D)** | **82.72%** | **0.7565** | Clean cropped visual appearance alone |
+| **Multi-Modal Fused (WITHOUT K/T)** | **78.19%** | **0.7349** | Combined decision fusion (matches Geometry prior) |
+| *Geometry (+ K/T Override)* | *83.13%* | *0.7834* | *Post-hoc heuristic (possibly tuned on test data)* |
+| *Multi-Modal Fused (+ K/T Override)* | *83.13%* | *0.7834* | *Post-hoc heuristic (matches best single branch, 0% gain)* |
 
 > [!IMPORTANT]  
 > **Honest Assessment of Decision Fusion:**  
-> On this same-signer held-out test set, multi-modal decision fusion **matches the best single branch (83.13%) and does NOT improve accuracy over Geometry (+ K/T override)**. CNN alone achieves 82.72% and Geometry(+KT) achieves 83.13%.
+> Multi-modal decision fusion **does NOT improve accuracy over the best single branch**. Without K/T override, fusion achieves 78.19% (matching Geometry baseline 78.19%, while CNN alone achieves 82.72%). With K/T override, fusion achieves 83.13% (matching Geometry+KT 83.13%).
 
-### Disagreement Subset Analysis (When Branches Disagree)
+### Agreement vs Disagreement Breakdown (Full N=243 and Clean N=232)
 
-The Geometry(+KT) branch and CNN branch disagree on **45 out of 243 test samples (18.52%)**:
+When the Geometry and CNN predictions differ on a sample, **they cannot both be correct**. Below is the mutually exclusive breakdown across agreement and disagreement partitions:
 
-| Branch / Model | Accuracy on Disagreement Subset (N=45) | Correct Samples | Mechanism / Behavior |
+| Metric / Subset | Full Held-Out Set (N=243) | Clean De-duplicated Set (N=232) | Interpretation |
 |---|:---:|:---:|---|
-| **Geometry-Only (+ K/T Override)** | **8.89%** | 4 / 45 | Landmark features corrupted by hand occlusion or overlap |
-| **RGB CNN-Only (128x128x3)** | **6.67%** | 3 / 45 | Visual texture degraded by motion blur or resting pose confusion |
-| **Multi-Modal Fused Engine** | **8.89%** | 4 / 45 | Defaults to Landmark geometry prior |
+| **Branches AGREE (Geometry == CNN)** | **198 / 243 (81.48%)** | **187 / 232 (80.60%)** | Both modalities converge on identical sign |
+| **Accuracy on Agreement Subset** | **100.0% (198 / 198)** | **100.0% (187 / 187)** | **Zero errors observed when modalities agree** |
+| **Branches DISAGREE (Geometry != CNN)** | **45 / 243 (18.52%)** | **45 / 232 (19.40%)** | Modalities diverge |
+| • **Samples where Geometry is right** | **4 / 45 (8.89%)** | **4 / 45 (8.89%)** | CNN confused by skin/lighting; landmark correct |
+| • **Samples where CNN is right** | **3 / 45 (6.67%)** | **3 / 45 (6.67%)** | Landmark occluded/distorted; CNN texture correct |
+| • **Samples where NEITHER is right** | **38 / 45 (84.4%)** | **38 / 45 (84.4%)** | **Both models fail on ambiguous or occluded frames** |
+| **Fused Accuracy on Disagreement Subset** | **8.89% (4 / 45)** | **8.89% (4 / 45)** | Fusion defaults to landmark prior |
 
-*Key Diagnostic Finding:* On the 45 samples where the two branches disagree, **both branches are wrong over 91% of the time**. These cases correspond to challenging edge frames (e.g. severe bimanual occlusion during letters `B`, `D`, `P`, or hand-crossing ambiguity during `M`, `N`). Because the fusion engine defaults to the landmark prior when confidence is split, fusion cannot rescue predictions when both underlying feature representations are compromised.
+*Key Diagnostic Finding:* In **38 out of 45 disagreement samples (84.4%)**, neither modality is correct. When branches diverge, the sample is almost always corrupted by severe bimanual occlusion (e.g. `B`, `D`, `P`) or joint crossing overlap (e.g. `M`, `N`). Because the fusion engine defaults to the landmark prior when confidence is split, fusion cannot rescue predictions when both models fail.
 
 ---
 
@@ -87,15 +103,19 @@ Evaluated on held-out test partitions to measure the effect of camera mirroring 
 
 ---
 
-## 4. Dual-Hand Heuristics & Statistical Significance (McNemar Test)
+## 4. Dual-Hand Heuristics & Statistical Significance (McNemar Test Analysis)
 
 Evaluated on the 243 same-signer held-out test samples (`best_val_model.h5`):
 
-| Configuration | Top-1 Accuracy | Delta Acc | Macro F1 | Delta F1 | Finding & Status |
+| Configuration | Top-1 Accuracy | Delta Acc | Macro F1 | Delta F1 | Finding & Methodological Status |
 |---|---|---|---|---|---|
-| **Baseline Model-Only** | 78.19% | — | 0.7349 | — | High baseline performance on held-out test set |
-| **With K vs T Override** | **83.13%** | **+4.94%** | **0.7834** | **+0.0485** | **Statistically Significant**: $\chi^2 = 6.7222, p = 0.0075$ (*possibly tuned on test data*) |
+| **Clean Baseline Model-Only** | **78.19%** | — | **0.7349** | — | Clean held-out benchmark reference |
+| **With K vs T Override** | 83.13% | +4.94% | 0.7834 | +0.0485 | *Nominal $\chi^2 = 6.7222, p = 0.0075$ — **INVALID hypothesis test** due to circular test-data tuning* |
 | **With B/H Heuristic Clamp** | 72.02% | -6.17% | 0.6281 | -0.1068 | **Disabled by Default**: Wrist distance clamp rejects valid poses |
+
+> [!CAUTION]  
+> **Invalidity of McNemar Statistical Test:**  
+> While the paired McNemar test yielded a nominal $\chi^2 = 6.7222$ and exact binomial $p = 0.0075$, this test is **methodologically invalid as a confirmatory hypothesis test**. The geometric override thresholds (`dy > 0.08 and dy > 1.2 * dx`) were derived after observing Class K misclassifications on these same held-out samples. Evaluating a post-hoc rule on the data that inspired it violates test-set independence.
 
 ---
 
@@ -140,7 +160,20 @@ Measured on **Apple Silicon M2 (CPU)** using `src/benchmark_latency.py`:
 
 ---
 
-## 7. Artifacts & Generated Assets
+## 7. Remaining Work & Future Hypotheses
+
+1. **Disagreement-Gated Uncertainty Output (Hypothesis):**  
+   - *Observation:* On the held-out test set, when landmark geometry and visual CNN branches disagree (45 samples), neither branch is correct 84.4% of the time (38/45).
+   - *Hypothesis:* Emitting an explicit `"Uncertain / Re-sign"` status or withholding letter emission when the two modalities disagree could prevent 84.4% of divergence-induced errors in live usage.
+   - *Status:* **Hypothesis to be tested on live multi-signer data, not an established result.** Multi-signer evaluation is required before activating this in production.
+2. **Multi-Signer Re-Training:**  
+   - Incorporate diverse signers with variable hand dimensions, joint elasticity, and skin tones to overcome same-signer over-reliance.
+3. **Auditory Verification:**  
+   - Conduct structured human listening tests across all regional Indic speech output tiers.
+
+---
+
+## 8. Artifacts & Generated Assets
 
 - **Dual-Hand 144D Confusion Matrix:** Saved to `assets/confusion_matrix.png`
 - **Model Checkpoints:**
