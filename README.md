@@ -221,9 +221,9 @@ To maintain rigorous scientific standards, all model performance metrics are eva
 | **Dual-Hand (+ K/T Override)** | Deep MLP + Heuristic (`144D`) | **20** Bimanual | RealSign Held-Out Test (N=243) | **83.13%** | **0.7834** | *Possibly tuned on test data, not a clean estimate* |
 | **Paired Decision Fusion (+ K/T)** | Landmark Prior + CNN + Heuristic | **20** Bimanual | Paired Same-Signer Subset (N=243) | **83.13%** | **0.7834** | *Matches Geometry (+KT) alone (0% gain)* |
 
-*\*Decision Fusion Honesty: Multi-modal decision fusion matches the best single branch and does not improve accuracy (78.19% fused vs 82.72% CNN without K/T; 83.13% fused vs 83.13% Geometry+KT).*  
-*\*K/T Override Warning: The orientation threshold (`dy > 0.08 and dy > 1.2 * dx`) was formulated by inspecting Class K $\to$ T errors on this held-out set; this +4.94% gain is **possibly tuned on test data, not a clean estimate**, and the associated McNemar p-value is methodologically invalid.*  
-*\*Agreement Analysis: When branches AGREE (198 of 243, 81.48%), accuracy is 100.0%. When branches DISAGREE (45 of 243, 18.52%), Geometry is right on 4 (8.89%), CNN on 3 (6.67%), and NEITHER is right on 38 (84.4%).*  
+*\*Decision Fusion Honesty: Multi-modal decision fusion without the K/T override **equals the geometry branch (78.19%) and is below the CNN alone (82.72%)** on this same-signer set (with K/T override: 83.13% fused vs 83.13% Geometry+KT). Crucially, the RGB CNN was trained on the exact same signer's cropped photos under fixed lighting, and generalizes poorly live to novel signers per our audit, so **this offline ranking says nothing about live real-world performance**.*  
+*\*Clean Agreement Analysis: Evaluated strictly using the clean baseline geometry (WITHOUT K/T override) against CNN. When branches AGREE (186 of 243, 76.54%), accuracy is 100.0% (186/186). When branches DISAGREE (57 of 243, 23.46%), Geometry is right on 4 (7.02%), CNN on 15 (26.32%), and NEITHER is right on 38 (66.67%). On de-duplicated data (N=232): 175 agree (100% acc), 57 disagree (Geom right 4, CNN right 15, Neither right 38).*  
+*\*Separate Reference (K/T Override, possibly tuned on test data): The orientation threshold (`dy > 0.08 and dy > 1.2 * dx`) was formulated by inspecting Class K $\to$ T errors on this held-out set; this +4.94% gain is **possibly tuned on test data, not a clean estimate**, and the associated McNemar p-value is methodologically invalid. Post-hoc override flips 12 Class T predictions to K, artificially shifting 12 disagreement samples into agreement (198 agree / 45 disagree: Geom right 4, CNN right 3, Neither right 38).*  
 *\*Near-Duplicate Check: Removing the 4.5% near-duplicate samples (1-NN distance < 0.10, N=232) yields 77.16% baseline, 81.90% CNN alone, 77.16% fused without K/T, and 82.33% with K/T override, confirming stability.*
 
 > [!NOTE]  
@@ -703,7 +703,7 @@ flowchart LR
 - [ ] **Phase 7: Human-in-the-Loop Active Learning (Planned)** — Opt-in user correction capture for iterative model fine-tuning and signer personalization.
 
 ### Hypotheses to Test on Live Multi-Signer Data
-- **Disagreement-Gated Uncertainty (Hypothesis):** When landmark geometry and visual CNN branches disagree (45 of 243 samples), neither branch is correct 84.4% of the time (38/45). Displaying an explicit "Uncertain / Re-sign" state when branches diverge could suppress 84.4% of spurious transitions in live operation. **This is a hypothesis to be tested on live multi-signer data, not an established result.**
+- **Disagreement-Gated Uncertainty (Hypothesis):** Under clean baseline evaluation, when landmark geometry and visual CNN branches disagree (57 of 243 samples), neither branch is correct 66.67% of the time (38/57; 84.4% or 38/45 under the K/T override). Displaying an explicit "Uncertain / Re-sign" state when branches diverge could suppress spurious transitions in live operation. **This is a hypothesis to be tested on live multi-signer data, not an established result.**
 - **Multi-Signer Robustness:** Training across multiple diverse signers to eliminate the single-signer intra-recording bias present in RealSign.
 - **Auditory Verification:** Completing human ear listening audits for all 10 languages across all deployed speaker environments.
 
@@ -715,7 +715,7 @@ Contributions are welcome from developers, researchers, and accessibility advoca
 
 ### How to Contribute
 1. **Fork the Repository:** Create your own branch (`git checkout -b feature/improvement`).
-2. **Validate Code:** Ensure all existing 118 unit tests pass (`./venv/bin/python -m unittest discover -s tests`).
+2. **Validate Code:** Ensure all existing 245 unit tests pass (`./venv/bin/python -m unittest discover -s tests`).
 3. **Submit a Pull Request:** Provide a clear summary of changes, rationale, and evaluation data.
 
 ### Academic Citation

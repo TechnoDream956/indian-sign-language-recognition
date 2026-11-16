@@ -376,12 +376,16 @@ def build_chapter3(doc: Document):
     add_body_p(
         doc,
         "Paired Multi-Modal Fusion, Agreement and Disagreement Analysis: Evaluated on the 243 paired held-out samples, Geometry baseline "
-        "achieved 78.19% and CNN alone achieved 82.72%. Multi-modal decision fusion without K/T override matched the Geometry prior at 78.19% "
-        "(0.00% gain), and with K/T override matched Geometry(+KT) at 83.13% (0.00% gain). Crucially, the two branches agreed on 198 out of "
-        "243 samples (81.48%), achieving 100.0% accuracy on this agreement subset. On the 45 samples where the branches disagreed (18.52%), "
-        "they cannot both be correct: Geometry was correct on 4 samples (8.89%), CNN was correct on 3 samples (6.67%), and neither was correct "
-        "on 38 samples (84.4%). Because the fusion engine defaults to the landmark prior when confidence is split, fusion cannot rescue "
-        "predictions when both underlying representations fail."
+        "achieved 78.19% and CNN alone achieved 82.72%. Multi-modal decision fusion without the K/T override matched the Geometry branch at 78.19% "
+        "(0.00% gain) and was below CNN alone (82.72%). With the K/T override, fusion matched Geometry(+KT) at 83.13% (0.00% gain). "
+        "Crucially, the visual CNN was trained on the exact same signer's cropped studio photos under fixed lighting, and generalizes poorly live "
+        "to novel signers per our engineering audit, so this offline ranking says nothing about live real-world performance. "
+        "Evaluated strictly using the clean baseline geometry (WITHOUT K/T override) against CNN, the two branches agreed on 186 out of "
+        "243 samples (76.54%), achieving 100.0% accuracy on this agreement subset (186/186). On the 57 samples where the branches disagreed (23.46%), "
+        "they cannot both be correct: Geometry was correct on 4 samples (7.02%), CNN was correct on 15 samples (26.32%), and neither was correct "
+        "on 38 samples (66.67%). On the de-duplicated test set (N=232, 11 near-duplicates removed): 175 agreed (100.0% accuracy) and 57 disagreed "
+        "(Geometry right on 4, CNN right on 15, neither right on 38). (Separate reference: applying the post-hoc K/T override flips 12 Class T predictions "
+        "to Class K, shifting 12 samples into agreement: 198 agree with 100% accuracy, and 45 disagree with Geometry right 4, CNN right 3, neither right 38)."
     )
 
     # Insert Figure 8 (Benchmark Ablation)

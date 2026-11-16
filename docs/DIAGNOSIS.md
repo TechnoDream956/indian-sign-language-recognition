@@ -120,21 +120,35 @@ Evaluated on the exact same 243 same-signer held-out samples where paired raw la
 |---|:---:|:---:|---|
 | **Geometry Baseline (144D MLP)** | **78.19%** | **0.7349** | Clean dual-hand landmark geometry alone |
 | **RGB CNN Alone (128x128x3 Conv2D)** | **82.72%** | **0.7565** | Clean cropped visual texture alone |
-| **Multi-Modal Fused (WITHOUT K/T)** | **78.19%** | **0.7349** | Combined decision fusion (matches Geometry prior) |
-| *Geometry (+ K/T Override)* | *83.13%* | *0.7834* | *Post-hoc heuristic (possibly tuned on test data)* |
-| *Multi-Modal Fused (+ K/T Override)* | *83.13%* | *0.7834* | *Matches best single branch (0.00% gain)* |
+| **Multi-Modal Fused (WITHOUT K/T)** | **78.19%** | **0.7349** | **Equals Geometry branch (78.19%), below CNN alone (82.72%)** |
+| *Geometry (+ K/T Override)* | *83.13%* | *0.7834* | *Post-hoc heuristic (possibly tuned on test data, not clean)* |
+| *Multi-Modal Fused (+ K/T Override)* | *83.13%* | *0.7834* | *Matches Geometry (+KT) alone (0.00% gain)* |
 
 > [!IMPORTANT]  
-> **Honest Assessment of Decision Fusion:**  
-> On this same-signer held-out test set, multi-modal decision fusion **does NOT improve accuracy over the best single branch**. Without K/T override, fusion achieves 78.19% (matching Geometry baseline 78.19%, while CNN alone achieves 82.72%). With K/T override, fusion matches the single branch at 83.13%.
+> **Honest Assessment of Decision Fusion & Offline vs Live Ranking:**  
+> On this same-signer held-out test set, multi-modal decision fusion without the K/T override **equals the geometry branch (78.19%) and is below the CNN alone (82.72%)**. Because the fusion engine defaults to the landmark prior when confidence is split or high, fusion does not improve accuracy.  
+> **Crucial Caveat on CNN Performance:** The RGB CNN was trained on the exact same signer's cropped studio photos under fixed lighting and camera focal length. As documented in our live engineering audit, visual CNNs generalize very poorly live to novel signers with differing skin tones, clothing, and background clutters. Consequently, **the offline ranking showing CNN higher than landmark geometry is an artifact of the single-signer dataset and says nothing about live real-world performance**.
 
-### Disagreement Analysis (When Branches Disagree)
-- On the 243 test samples, the Geometry(+KT) branch and CNN branch disagree on **45 samples (18.52%)**.
-- Because the two models predict different classes, they cannot both be correct on any disagreement sample:
-  - **Geometry is right (and CNN wrong):** **4 of 45 (8.89%)**
-  - **CNN is right (and Geometry wrong):** **3 of 45 (6.67%)**
-  - **Neither is right:** **38 of 45 (84.4%)**
-- **Interpretation:** In 38 of the 45 disagreement cases (84.4%), both modalities fail simultaneously due to severe bimanual occlusion or non-canonical finger overlaps. Fusion falls back to the landmark prior (achieving 8.89% on the disagreement subset) and cannot rescue predictions when both underlying representations fail.
+### Agreement vs Disagreement Analysis (Clean Baseline Geometry vs CNN)
+- Evaluated using the **clean baseline geometry model (strictly without K/T override)** against the visual CNN:
+  - **Branches AGREE (Geometry == CNN):** **186 / 243 (76.54%)** $\to$ Accuracy = **100.0% (186 / 186)**.
+  - **Branches DISAGREE (Geometry != CNN):** **57 / 243 (23.46%)** $\to$
+    - **Geometry right (and CNN wrong):** **4 of 57 (7.02%)**
+    - **CNN right (and Geometry wrong):** **15 of 57 (26.32%)**
+    - **Neither right:** **38 of 57 (66.67%)**
+    - *Sum check:* 4 + 15 + 38 = 57.
+    - *Reconciliation:* Geometry total correct = 186 + 4 = 190 (78.19%). CNN total correct = 186 + 15 = 201 (82.72%).
+- On the de-duplicated test set (N=232, 11 near-duplicates removed):
+  - Branches AGREE: 175 / 232 (75.43%) $\to$ Accuracy = 100.0% (175 / 175).
+  - Branches DISAGREE: 57 / 232 (24.57%) $\to$ Geometry right: 4 (7.02%), CNN right: 15 (26.32%), Neither right: 38 (66.67%).
+- **Interpretation:** In 38 of the 57 disagreement cases (66.67%), both modalities fail simultaneously due to severe bimanual occlusion or non-canonical finger overlaps. Fusion falls back to the landmark prior and cannot rescue predictions when both underlying representations fail.
+
+> [!NOTE]  
+> **Separate Reference: Agreement with Post-Hoc K/T Override (Possibly Tuned on Test Data):**  
+> Applying the post-hoc K/T override flips 12 Class T predictions to Class K (the true label for those samples), shifting 12 disagreement samples into agreement:
+> - Branches AGREE: 198 / 243 (81.48%), Accuracy on Agree = 100.0% (198/198).
+> - Branches DISAGREE: 45 / 243 (18.52%) $\to$ Geometry right: 4 / 45 (8.89%), CNN right: 3 / 45 (6.67%), Neither right: 38 / 45 (84.4%).  
+> As noted, this K/T-augmented estimate is circular and is not a clean measure of model behavior.
 
 ---
 

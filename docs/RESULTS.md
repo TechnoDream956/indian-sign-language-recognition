@@ -62,29 +62,39 @@ Evaluated on the exact same 243 same-signer held-out samples where paired raw la
 |---|:---:|:---:|---|
 | **Geometry Baseline (144D MLP)** | **78.19%** | **0.7349** | Clean landmark geometry alone |
 | **RGB CNN Alone (128x128x3 Conv2D)** | **82.72%** | **0.7565** | Clean cropped visual appearance alone |
-| **Multi-Modal Fused (WITHOUT K/T)** | **78.19%** | **0.7349** | Combined decision fusion (matches Geometry prior) |
-| *Geometry (+ K/T Override)* | *83.13%* | *0.7834* | *Post-hoc heuristic (possibly tuned on test data)* |
-| *Multi-Modal Fused (+ K/T Override)* | *83.13%* | *0.7834* | *Post-hoc heuristic (matches best single branch, 0% gain)* |
+| **Multi-Modal Fused (WITHOUT K/T)** | **78.19%** | **0.7349** | **Equals Geometry branch (78.19%), below CNN alone (82.72%)** |
+| *Geometry (+ K/T Override)* | *83.13%* | *0.7834* | *Post-hoc heuristic (possibly tuned on test data, not a clean estimate)* |
+| *Multi-Modal Fused (+ K/T Override)* | *83.13%* | *0.7834* | *Matches Geometry (+KT) alone (0.00% gain)* |
 
 > [!IMPORTANT]  
-> **Honest Assessment of Decision Fusion:**  
-> Multi-modal decision fusion **does NOT improve accuracy over the best single branch**. Without K/T override, fusion achieves 78.19% (matching Geometry baseline 78.19%, while CNN alone achieves 82.72%). With K/T override, fusion achieves 83.13% (matching Geometry+KT 83.13%).
+> **Honest Assessment of Decision Fusion & Offline vs Live Ranking:**  
+> On this same-signer held-out test set, multi-modal decision fusion without the K/T override **equals the geometry branch (78.19%) and is below the CNN alone (82.72%)**. Because the fusion engine defaults to the landmark prior when confidence is split or high, fusion does not improve accuracy.  
+> **Crucial Caveat on CNN Performance:** The RGB CNN was trained on the exact same signer's cropped studio photos under fixed lighting and camera focal length. As documented in our live engineering audit (`docs/DIAGNOSIS.md`), visual CNNs generalize very poorly live to novel signers with differing skin tones, clothing, and background clutters. Consequently, **the offline ranking showing CNN higher than landmark geometry is an artifact of the single-signer dataset and says nothing about live real-world performance**.
 
-### Agreement vs Disagreement Breakdown (Full N=243 and Clean N=232)
+### Agreement vs Disagreement Breakdown (Clean Baseline Geometry vs CNN)
 
-When the Geometry and CNN predictions differ on a sample, **they cannot both be correct**. Below is the mutually exclusive breakdown across agreement and disagreement partitions:
+Evaluated using the **clean baseline geometry model (strictly WITHOUT the K/T override)** against the visual CNN. When the two modalities disagree, they cannot both be correct:
 
 | Metric / Subset | Full Held-Out Set (N=243) | Clean De-duplicated Set (N=232) | Interpretation |
 |---|:---:|:---:|---|
-| **Branches AGREE (Geometry == CNN)** | **198 / 243 (81.48%)** | **187 / 232 (80.60%)** | Both modalities converge on identical sign |
-| **Accuracy on Agreement Subset** | **100.0% (198 / 198)** | **100.0% (187 / 187)** | **Zero errors observed when modalities agree** |
-| **Branches DISAGREE (Geometry != CNN)** | **45 / 243 (18.52%)** | **45 / 232 (19.40%)** | Modalities diverge |
-| • **Samples where Geometry is right** | **4 / 45 (8.89%)** | **4 / 45 (8.89%)** | CNN confused by skin/lighting; landmark correct |
-| • **Samples where CNN is right** | **3 / 45 (6.67%)** | **3 / 45 (6.67%)** | Landmark occluded/distorted; CNN texture correct |
-| • **Samples where NEITHER is right** | **38 / 45 (84.4%)** | **38 / 45 (84.4%)** | **Both models fail on ambiguous or occluded frames** |
-| **Fused Accuracy on Disagreement Subset** | **8.89% (4 / 45)** | **8.89% (4 / 45)** | Fusion defaults to landmark prior |
+| **Branches AGREE (Geometry == CNN)** | **186 / 243 (76.54%)** | **175 / 232 (75.43%)** | Both modalities converge on identical sign |
+| **Accuracy on Agreement Subset** | **100.0% (186 / 186)** | **100.0% (175 / 175)** | **Zero errors observed when modalities agree** |
+| **Branches DISAGREE (Geometry != CNN)** | **57 / 243 (23.46%)** | **57 / 232 (24.57%)** | Modalities diverge |
+| • **Samples where Geometry is right** | **4 / 57 (7.02%)** | **4 / 57 (7.02%)** | Landmark skeleton correct; CNN visual texture fails |
+| • **Samples where CNN is right** | **15 / 57 (26.32%)** | **15 / 57 (26.32%)** | CNN visual texture correct; landmark skeleton fails |
+| • **Samples where NEITHER is right** | **38 / 57 (66.67%)** | **38 / 57 (66.67%)** | **Both models fail on ambiguous or occluded frames** |
+| **Fused Accuracy on Disagreement Subset** | **7.02% (4 / 57)** | **7.02% (4 / 57)** | Fusion defaults to landmark prior (4/57 correct) |
 
-*Key Diagnostic Finding:* In **38 out of 45 disagreement samples (84.4%)**, neither modality is correct. When branches diverge, the sample is almost always corrupted by severe bimanual occlusion (e.g. `B`, `D`, `P`) or joint crossing overlap (e.g. `M`, `N`). Because the fusion engine defaults to the landmark prior when confidence is split, fusion cannot rescue predictions when both models fail.
+*Reconciliation Check:*  
+- Full N=243: Geometry total correct = 186 (agree) + 4 (disagree) = 190 (78.19%). CNN total correct = 186 (agree) + 15 (disagree) = 201 (82.72%).  
+- De-duplicated N=232: Geometry total correct = 175 (agree) + 4 (disagree) = 179 (77.16%). CNN total correct = 175 (agree) + 15 (disagree) = 190 (81.90%).
+
+> [!NOTE]  
+> **Separate Reference: Agreement with Post-Hoc K/T Override (Possibly Tuned on Test Data):**  
+> When the post-hoc K/T override is applied to geometry, 12 Class T predictions flip to Class K (the true label for those samples). This artificially shifts 12 disagreement samples into agreement:
+> - Branches AGREE: 198 / 243 (81.48%), Accuracy on Agree = 100.0% (198/198).
+> - Branches DISAGREE: 45 / 243 (18.52%) $\to$ Geometry right: 4 / 45 (8.89%), CNN right: 3 / 45 (6.67%), Neither right: 38 / 45 (84.4%).  
+> As noted, this K/T-augmented estimate is circular and is not a clean measure of model behavior.
 
 ---
 
@@ -163,8 +173,8 @@ Measured on **Apple Silicon M2 (CPU)** using `src/benchmark_latency.py`:
 ## 7. Remaining Work & Future Hypotheses
 
 1. **Disagreement-Gated Uncertainty Output (Hypothesis):**  
-   - *Observation:* On the held-out test set, when landmark geometry and visual CNN branches disagree (45 samples), neither branch is correct 84.4% of the time (38/45).
-   - *Hypothesis:* Emitting an explicit `"Uncertain / Re-sign"` status or withholding letter emission when the two modalities disagree could prevent 84.4% of divergence-induced errors in live usage.
+   - *Observation:* On the held-out test set under clean baseline evaluation, when landmark geometry and visual CNN branches disagree (57 samples), neither branch is correct 66.67% of the time (38/57; 84.4% or 38/45 under the K/T override).
+   - *Hypothesis:* Emitting an explicit `"Uncertain / Re-sign"` status or withholding letter emission when the two modalities disagree could prevent divergence-induced errors in live usage.
    - *Status:* **Hypothesis to be tested on live multi-signer data, not an established result.** Multi-signer evaluation is required before activating this in production.
 2. **Multi-Signer Re-Training:**  
    - Incorporate diverse signers with variable hand dimensions, joint elasticity, and skin tones to overcome same-signer over-reliance.

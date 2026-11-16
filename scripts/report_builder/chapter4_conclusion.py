@@ -140,8 +140,8 @@ def build_chapter4(doc: Document):
 
     add_bullet_p(
         doc,
-        "Empirical evaluation revealed that when landmark geometry and visual CNN branches disagree (45 of 243 samples), neither branch "
-        "is correct 84.4% of the time (38/45). We formulate the hypothesis that gating or displaying an explicit 'Uncertain / Re-sign' status "
+        "Empirical evaluation revealed that when clean landmark geometry and visual CNN branches disagree (57 of 243 samples), neither branch "
+        "is correct 66.67% of the time (38/57; 84.4% or 38/45 under the K/T override). We formulate the hypothesis that gating or displaying an explicit 'Uncertain / Re-sign' status "
         "when branches diverge could suppress spurious letter insertions. This represents a research hypothesis to be tested on live "
         "multi-signer recordings, not an established result.",
         bold_prefix="6. Disagreement-Gated Uncertainty Output (Hypothesis): "
